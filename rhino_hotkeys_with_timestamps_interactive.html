@@ -242,7 +242,7 @@
             body { padding: 0; font-size: 10pt; max-width: 100%; background: white !important; color: black !important; }
             .video-panel, #menuBtn, .modal-overlay { display: none !important; }
             .timeline-section { border: 1px solid #000 !important; break-inside: avoid; margin-bottom: 15px; background: white !important; }
-            .section-header { background-color: #e5e7eb !important; color: #000 !important; -webkit-print-color-adjust: exact; border-bottom: 1px solid #000; }
+            .section-header { background-color: #e5e7eb !important; color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; border-bottom: 1px solid #000; }
             ul.tree ul li:last-child::after { background: transparent !important; }
             kbd, .mouse-action, .cmd-type { box-shadow: none !important; border: 1px solid #000 !important; background: white !important; color: black !important; }
             .ts { border: 1px solid #000 !important; background: none !important; color: #000 !important; text-decoration: none !important; }
@@ -302,6 +302,7 @@
                                 <ul>
                                     <li><span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-lmb"/><use href="#mouse-base"/></svg> Dbl-Click</span> <span class="desc">Name toggles 4-view</span> <a class="ts" data-time="03:37">03:37</a></li>
                                     <li><span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-rmb"/><use href="#mouse-base"/></svg> Click</span> <span class="desc">Name changes display</span> <a class="ts" data-time="03:52">03:52</a></li>
+                                    <li><kbd>F7</kbd> <span class="desc">Toggle Grid visibility</span> <a class="ts" data-time="11:09">11:09</a></li>
                                 </ul>
                             </li>
                             <li><span class="cmd-title">Gumball Tool</span>
@@ -309,12 +310,20 @@
                                     <li><strong>Arrows</strong> <span class="desc">Move</span> <a class="ts" data-time="05:46">05:46</a> | + <kbd>Alt</kbd> <span class="desc">Copy</span> <a class="ts" data-time="09:21">09:21</a></li>
                                     <li><strong>Arcs</strong> <span class="desc">Rotate</span> <a class="ts" data-time="05:37">05:37</a> | + <kbd>Shift</kbd> <span class="desc">Ortho</span> <a class="ts" data-time="07:56">07:56</a></li>
                                     <li><strong>Squares</strong> <span class="desc">Scale</span> <a class="ts" data-time="06:17">06:17</a> | + <kbd>Shift</kbd> <span class="desc">3D</span> <a class="ts" data-time="06:23">06:23</a></li>
+                                    <li><strong>Double-click Handle</strong> <span class="desc">Reposition gumball without moving object</span> <a class="ts" data-time="07:16">07:16</a></li>
+                                    <li><span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-rmb"/><use href="#mouse-base"/></svg> Click</span> <span class="desc">Gumball menu; toggle Auto Reset</span> <a class="ts" data-time="06:44">06:44</a></li>
                                 </ul>
                             </li>
                             <li><span class="cmd-title">Selection</span>
                                 <ul>
                                     <li><span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-lmb"/><use href="#mouse-base"/></svg> L-R / R-L Drag</span> <span class="desc">Window/Crossing</span> <a class="ts" data-time="11:23">11:23</a></li>
                                     <li><kbd>Shift</kbd>/<kbd>Ctrl</kbd> + <span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-lmb"/><use href="#mouse-base"/></svg> Click</span> <span class="desc">Add/Remove</span> <a class="ts" data-time="11:50">11:50</a></li>
+                                    <li><kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd> <span class="desc">Undo / Redo</span> <a class="ts" data-time="08:56">08:56</a></li>
+                                    <li><kbd>Ctrl+C</kbd> / <kbd>Ctrl+V</kbd> <span class="desc">Copy / Paste</span> <a class="ts" data-time="09:12">09:12</a></li>
+                                    <li><span class="cmd-type">Invert</span> / <span class="cmd-type">Hide</span> / <span class="cmd-type">Show</span> / <span class="cmd-type">Lock</span> / <span class="cmd-type">Unlock</span> <a class="ts" data-time="09:39">09:39</a></li>
+                                    <li><span class="cmd-type">Move</span> <span class="desc">Precise point-to-point snaps (A to B)</span> <a class="ts" data-time="12:46">12:46</a></li>
+                                    <li><span class="cmd-type">Rotate</span> <span class="desc">Standard 2D rotation</span> <a class="ts" data-time="13:07">13:07</a></li>
+                                    <li><span class="cmd-type">Orient3Pt</span> <span class="desc">Align 3 source points to 3 target points</span> <a class="ts" data-time="14:49">14:49</a></li>
                                 </ul>
                             </li>
                         </ul>
@@ -328,11 +337,13 @@
                             <li><span class="cmd-title">Curves to Solids</span>
                                 <ul>
                                     <li><span class="cmd-type">Polyline</span> / <span class="cmd-type">Curve</span> <a class="ts" data-time="16:37">16:37</a></li>
+                                    <li><span class="cmd-type">Circle</span> / <span class="cmd-type">Rectangle</span> <span class="desc">Basic 2D shapes</span> <a class="ts" data-time="17:11">17:11</a></li>
                                     <li><span class="cmd-type">Join</span> / <span class="cmd-type">Explode</span> <a class="ts" data-time="18:33">18:33</a></li>
                                     <li><span class="cmd-type">ExtrudeCrv</span> <span class="desc">2D to 3D</span> <a class="ts" data-time="19:14">19:14</a></li>
                                     <li><span class="cmd-type">Cap</span> <span class="desc">Closes holes to solid</span> <a class="ts" data-time="19:56">19:56</a></li>
                                     <li><span class="cmd-type">PlanarSrf</span> <span class="desc">Fills flat curve</span> <a class="ts" data-time="24:44">24:44</a></li>
                                     <li><span class="cmd-type">Trim</span> <span class="desc">Delete overlap</span> <a class="ts" data-time="25:12">25:12</a></li>
+                                    <li><span class="cmd-type">DupBorder</span> <span class="desc">Extract outline curve from a surface</span> <a class="ts" data-time="25:41">25:41</a></li>
                                 </ul>
                             </li>
                             <li><span class="cmd-title">Points & Sub-Select</span>
@@ -345,8 +356,10 @@
                             <li><span class="cmd-title">Geometry Types</span>
                                 <ul>
                                     <li><span class="cmd-title">NURBS</span> <span class="cmd-type">Rebuild</span> <a class="ts" data-time="28:33">28:33</a></li>
+                                    <li><span class="cmd-title">Meshes</span> <span class="desc">Polygonal geometry (vs NURBS/SubD)</span> <a class="ts" data-time="31:33">31:33</a></li>
                                     <li><span class="cmd-title">SubD</span> <kbd>Tab</kbd> <span class="desc">Toggle Smooth/Box</span> <a class="ts" data-time="33:08">33:08</a></li>
                                     <li><span class="cmd-title">SubD</span> <kbd>Ctrl</kbd> + <strong>Drag</strong> <span class="desc">Extrude</span> <a class="ts" data-time="33:22">33:22</a></li>
+                                    <li><span class="cmd-type">Subdivide</span> <span class="desc">Split 1 SubD face into 4 faces</span> <a class="ts" data-time="35:29">35:29</a></li>
                                 </ul>
                             </li>
                         </ul>
@@ -364,6 +377,9 @@
                                     <li><kbd>Tab</kbd> <span class="desc">Quick-create next</span> <a class="ts" data-time="39:51">39:51</a></li>
                                     <li><span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-rmb"/><use href="#mouse-base"/></svg> Click</span> ➔ <span class="cmd-type">Change Layer</span> <a class="ts" data-time="40:05">40:05</a></li>
                                     <li><span class="cmd-type">Mirror</span> <span class="desc">Symmetry</span> <a class="ts" data-time="41:18">41:18</a></li>
+                                    <li><strong>Drag Layers</strong> <span class="desc">Create sub-layers; use prefix like Z_ to sort to bottom</span> <a class="ts" data-time="42:46">42:46</a></li>
+                                    <li><strong>Layer Color</strong> <span class="desc">Assign and organize by color</span> <a class="ts" data-time="44:02">44:02</a></li>
+                                    <li><strong>Layer Material</strong> <span class="desc">Assign per-layer material</span> <a class="ts" data-time="44:48">44:48</a></li>
                                 </ul>
                             </li>
                             <li><span class="cmd-title">Generators</span>
@@ -378,11 +394,15 @@
                         <ul class="tree">
                             <li><span class="cmd-title">2D Editing</span>
                                 <ul>
+                                    <li><strong>Tool Triangle</strong> <span class="desc">Click bottom-right corner to expand submenus</span> <a class="ts" data-time="54:17">54:17</a></li>
+                                    <li><span class="cmd-type">Line</span> <span class="desc">Perpendicular/Tangent to 2 Curves sub-tools</span> <a class="ts" data-time="54:42">54:42</a></li>
                                     <li><span class="cmd-type">Spiral/Helix</span> <a class="ts" data-time="48:03">48:03</a></li>
                                     <li><span class="cmd-type">Offset</span> <span class="desc">Expands evenly</span> <a class="ts" data-time="57:08">57:08</a></li>
                                     <li><span class="cmd-type">CurveBoolean</span> <span class="desc">Rapid trim</span> <a class="ts" data-time="57:43">57:43</a></li>
                                     <li><span class="cmd-type">FilletCorners</span> <span class="desc">Rounds 2D</span> <a class="ts" data-time="1:00:17">1:00:17</a></li>
+                                    <li><span class="cmd-type">Rectangle</span> <span class="desc">3-point method for angled rectangles</span> <a class="ts" data-time="1:00:46">1:00:46</a></li>
                                     <li><span class="cmd-type">BlendCrv</span> <span class="desc">Smooth connection</span> <a class="ts" data-time="1:01:44">1:01:44</a></li>
+                                    <li><span class="cmd-type">InsertControlPoint</span> <span class="desc">Add editable points to existing curve</span> <a class="ts" data-time="1:02:28">1:02:28</a></li>
                                 </ul>
                             </li>
                         </ul>
@@ -400,17 +420,20 @@
                                     <li><kbd>Arrows</kbd> <span class="desc">Normal (0.2)</span></li>
                                     <li><kbd>Ctrl+Arrows</kbd> <span class="desc">Small (0.05)</span></li>
                                     <li><kbd>Shift+Arrows</kbd> <span class="desc">Large</span></li>
+                                    <li><kbd>PageUp</kbd> / <kbd>PageDown</kbd> <span class="desc">Z-axis micro-nudge</span> <a class="ts" data-time="1:10:20">1:10:20</a></li>
                                 </ul>
                             </li>
                             <li><span class="cmd-title">Constraints</span>
                                 <ul>
                                     <li><kbd>Shift</kbd> <span class="desc">Toggle Ortho</span> <a class="ts" data-time="1:06:33">1:06:33</a></li>
                                     <li><kbd>Alt</kbd> <span class="desc">Toggle Osnaps</span></li>
+                                    <li><strong>Grid Snap</strong> <span class="desc">Lock movement/drawing to grid units</span> <a class="ts" data-time="1:10:54">1:10:54</a></li>
                                     <li><strong>Planar Snap</strong> <span class="desc">Keeps Z-height</span> <a class="ts" data-time="1:11:56">1:11:56</a></li>
                                 </ul>
                             </li>
                             <li><span class="cmd-title">CPlanes & Project</span>
                                 <ul>
+                                    <li><strong>Apparent Intersections</strong> <span class="desc">Use in Trim for view-based overlaps that do not touch in 3D</span> <a class="ts" data-time="1:16:35">1:16:35</a></li>
                                     <li><span class="cmd-type">Project</span> <span class="desc">Onto 3D srf</span> <a class="ts" data-time="1:18:17">1:18:17</a></li>
                                     <li><span class="cmd-type">ProjectToCPlane</span> <span class="desc">Flattens</span> <a class="ts" data-time="1:19:44">1:19:44</a></li>
                                 </ul>
@@ -425,15 +448,24 @@
                         <ul class="tree">
                             <li><span class="cmd-title">Splitting & Scaling</span>
                                 <ul>
+                                    <li><kbd>Space</kbd> / <kbd>Enter</kbd> / <span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-rmb"/><use href="#mouse-base"/></svg> Click</span> <span class="desc">Repeat last command</span> <a class="ts" data-time="1:23:37">1:23:37</a></li>
+                                    <li><strong>MMB Menu</strong> <span class="desc">Middle mouse command menu</span> <a class="ts" data-time="1:22:08">1:22:08</a></li>
+                                    <li><kbd>Ctrl</kbd> + <strong>Drag Tool Icon</strong> <span class="desc">Save command into MMB menu</span> <a class="ts" data-time="1:22:41">1:22:41</a></li>
+                                    <li><span class="cmd-type">SelCrv</span> / <span class="cmd-type">SelSrf</span> / <span class="cmd-type">SelDup</span> / <span class="cmd-type">SelLast</span> <span class="desc">Mass selection commands</span> <a class="ts" data-time="1:25:43">1:25:43</a></li>
                                     <li><span class="cmd-type">Rotate3D</span> <span class="desc">Custom axis</span> <a class="ts" data-time="1:31:19">1:31:19</a></li>
                                     <li><span class="cmd-type">Scale1D</span> <a class="ts" data-time="1:32:39">1:32:39</a></li>
+                                    <li><span class="cmd-type">Scale2D</span> <span class="desc">Scales width/depth while locking height</span> <a class="ts" data-time="1:33:22">1:33:22</a></li>
                                     <li><span class="cmd-type">Split</span> vs <span class="cmd-type">Trim</span> <a class="ts" data-time="1:34:16">1:34:16</a></li>
+                                    <li><span class="cmd-type">InterpCrvOnSrf</span> <span class="desc">Draw curve directly on a surface</span> <a class="ts" data-time="1:35:07">1:35:07</a></li>
+                                    <li><span class="cmd-type">Dir</span> <span class="desc">Display surface normals/direction arrows</span> <a class="ts" data-time="1:36:50">1:36:50</a></li>
                                 </ul>
                             </li>
                             <li><span class="cmd-title">Booleans (Solids)</span>
                                 <ul>
                                     <li><span class="cmd-type">BooleanUnion</span> <span class="desc">Fuses parts</span> <a class="ts" data-time="1:44:12">1:44:12</a></li>
                                     <li><span class="cmd-type">BooleanDifference</span> <span class="desc">Cuts hole</span> <a class="ts" data-time="1:44:46">1:44:46</a></li>
+                                    <li><span class="cmd-type">BooleanIntersection</span> <span class="desc">Keep overlapping volume only</span> <a class="ts" data-time="1:45:11">1:45:11</a></li>
+                                    <li><span class="cmd-type">Boolean2Objects</span> <span class="desc">Cycle through all boolean result options</span> <a class="ts" data-time="1:45:11">1:45:11</a></li>
                                 </ul>
                             </li>
                             <li><span class="cmd-title">Edge Softening</span>
@@ -454,13 +486,16 @@
                         <li><span class="cmd-title">Repeating Geometry (Arrays)</span>
                             <ul>
                                 <li><span class="cmd-type">ArrayLinear/Polar</span> <span class="desc">Rows or circles</span> <a class="ts" data-time="1:50:02">1:50:02</a></li>
+                                <li><span class="cmd-type">Array</span> <span class="desc">3D grid across X/Y/Z</span> <a class="ts" data-time="1:50:30">1:50:30</a></li>
                                 <li><span class="cmd-type">ArrayCrvOnSrf</span> <span class="desc">Patterns on surface</span> <a class="ts" data-time="1:52:25">1:52:25</a></li>
+                                <li><span class="cmd-type">ArraySrf</span> <span class="desc">Pattern objects on target surface coordinates</span> <a class="ts" data-time="1:53:24">1:53:24</a></li>
                             </ul>
                         </li>
                         <li><span class="cmd-title">Global Transforms</span>
                             <ul>
                                 <li><span class="cmd-type">FlowAlongSrf</span> <span class="desc">Warps object to surface</span> <a class="ts" data-time="1:54:26">1:54:26</a></li>
                                 <li><span class="cmd-type">History</span> <span class="desc">(Record=Yes). Parent curve updates child.</span> <a class="ts" data-time="1:55:38">1:55:38</a></li>
+                                <li><span class="cmd-type">Flow</span> <span class="desc">Warp object along a 1D curve path</span> <a class="ts" data-time="1:56:00">1:56:00</a></li>
                                 <li><span class="cmd-type">Twist/Bend/Taper</span> <span class="desc">Bending along an axis</span> <a class="ts" data-time="1:58:41">1:58:41</a></li>
                                 <li><span class="cmd-type">CageEdit</span> <span class="desc">Wraps in editable point-box to stretch</span> <a class="ts" data-time="2:00:38">2:00:38</a></li>
                             </ul>
