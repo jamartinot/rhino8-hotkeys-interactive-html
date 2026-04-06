@@ -562,14 +562,27 @@
         </div>
     </div>
 
-    <script src="https://www.youtube.com/iframe_api"></script>
     <script>
-        // --- YOUTUBE PLAYER LOGIC ---
+        // 1. Load the YouTube API asynchronously (more reliable)
+        var tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        var firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+        // 2. Initialize the player with a "Ready" flag
         var player;
+        var isPlayerReady = false;
+
         function onYouTubeIframeAPIReady() {
             player = new YT.Player('player', {
                 videoId: '4mVBIbX5G5k',
-                playerVars: { 'playsinline': 1, 'rel': 0 }
+                playerVars: { 'playsinline': 1, 'rel': 0 },
+                events: {
+                    'onReady': function(event) {
+                        // This tells our code the video is successfully connected
+                        isPlayerReady = true;
+                    }
+                }
             });
         }
 
@@ -583,10 +596,13 @@
         document.querySelectorAll('.ts').forEach(link => {
             link.addEventListener('click', function(e) {
                 e.preventDefault();
-                if(!player || !player.seekTo) {
-                    alert("Please run this file on a local server to bypass YouTube restrictions.");
+
+                // 3. Check if YouTube is fully loaded before trying to jump
+                if(!isPlayerReady || typeof player.seekTo !== 'function') {
+                    alert("The YouTube video is still connecting. Please wait one second and try again.");
                     return;
                 }
+
                 let seconds = parseTimeStr(this.getAttribute('data-time'));
                 player.seekTo(seconds, true);
                 player.playVideo();
