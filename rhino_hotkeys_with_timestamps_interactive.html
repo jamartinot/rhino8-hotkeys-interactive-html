@@ -571,7 +571,7 @@
                         <!-- Keep this value in sync with the --video-width default in :root above. -->
                         <input type="range" id="videoSizeSlider" min="40" max="80" value="70"> 
                     </div>
-                    <p class="desc">Slide to adjust how much screen space the video takes up on desktop monitors.</p>
+                    <p class="desc">Slide to adjust how much screen space the video takes up on desktop monitors. This value is saved between visits.</p>
                 </div>
 
                  <!-- Chat stays in Feedback only by default.
@@ -585,7 +585,7 @@
                             <div class="msg msg-bot">Hello! Did you spot an error in the cheat sheet or have a feature request? Let me know!</div>
                         </div>
                         <div class="chat-input-area">
-                            <textarea id="chatInput" rows="2" placeholder="Type feedback... Use **bold**, *italic*, and `code`"></textarea>
+                            <textarea id="chatInput" rows="2" placeholder="Type feedback..."></textarea>
                             <button id="sendBtn">Send</button>
                         </div>
                         <div class="format-hint">Press Enter to send, Shift+Enter for newline.</div>
@@ -673,19 +673,54 @@
         });
 
         // --- SETTINGS LOGIC ---
-        // Theme Toggle
-        document.getElementById('themeToggle').addEventListener('change', function() {
-            if (this.checked) {
-                document.body.classList.add('dark-theme');
-            } else {
-                document.body.classList.remove('dark-theme');
+        const themeToggle = document.getElementById('themeToggle');
+        const videoSizeSlider = document.getElementById('videoSizeSlider');
+        const settingsStorage = {
+            theme: 'rhino-cheat-sheet-theme',
+            videoWidth: 'rhino-cheat-sheet-video-width'
+        };
+
+        function readStoredSetting(key) {
+            try {
+                return window.localStorage.getItem(key);
+            } catch (error) {
+                return null;
             }
+        }
+
+        function writeStoredSetting(key, value) {
+            try {
+                window.localStorage.setItem(key, value);
+            } catch (error) {
+                // Persistence is best-effort only.
+            }
+        }
+
+        function applyTheme(isDark) {
+            document.body.classList.toggle('dark-theme', isDark);
+            themeToggle.checked = isDark;
+        }
+
+        const savedTheme = readStoredSetting(settingsStorage.theme);
+        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        applyTheme(savedTheme ? savedTheme === 'dark' : systemPrefersDark);
+
+        themeToggle.addEventListener('change', function() {
+            const isDark = this.checked;
+            applyTheme(isDark);
+            writeStoredSetting(settingsStorage.theme, isDark ? 'dark' : 'light');
         });
 
-        // Video Size Slider
-        // Live preview only: this updates --video-width during the session and is not persisted after reload.
-        document.getElementById('videoSizeSlider').addEventListener('input', function() {
+        const savedVideoWidth = readStoredSetting(settingsStorage.videoWidth);
+        if (savedVideoWidth) {
+            videoSizeSlider.value = savedVideoWidth;
+        }
+        document.documentElement.style.setProperty('--video-width', videoSizeSlider.value + '%');
+
+        // This slider updates the CSS variable live and persists the chosen width.
+        videoSizeSlider.addEventListener('input', function() {
             document.documentElement.style.setProperty('--video-width', this.value + '%');
+            writeStoredSetting(settingsStorage.videoWidth, this.value);
         });
 
         // --- CHAT LOGIC ---
