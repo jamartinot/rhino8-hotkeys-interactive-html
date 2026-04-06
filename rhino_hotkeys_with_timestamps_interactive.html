@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rhino 8: Interactive Video Cheat Sheet Pro</title>
+    <style>
+        :root {
+            /* Light Theme (Default) */
+            --bg-color: #ffffff;
+            --text-color: #111827;
+            --primary: #1f2937;
+            --primary-text: #ffffff;
+            --accent: #2563eb;
+            --bg-light: #f9fafb;
+            --border: #e5e7eb;
+            --kbd-bg: #f3f4f6;
+            --kbd-border: #d1d5db;
+            --modal-overlay: rgba(0, 0, 0, 0.5);
+            --modal-bg: #ffffff;
+            --chat-bg: #f3f4f6;
+            --chat-user: #2563eb;
+            --chat-bot: #e5e7eb;
+            
+            /* Adjustable Settings */
+            --video-width: 70%; /* Default slightly larger, if changing, update the slider also line 508*/
+        }
+
+        /* Dark Theme Variables */
+        body.dark-theme {
+            --bg-color: #111827;
+            --text-color: #f9fafb;
+            --primary: #374151;
+            --primary-text: #f9fafb;
+            --accent: #60a5fa;
+            --bg-light: #1f2937;
+            --border: #374151;
+            --kbd-bg: #374151;
+            --kbd-border: #4b5563;
+            --modal-overlay: rgba(0, 0, 0, 0.7);
+            --modal-bg: #1f2937;
+            --chat-bg: #111827;
+            --chat-user: #3b82f6;
+            --chat-bot: #374151;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            line-height: 1.5;
+            color: var(--text-color);
+            background-color: var(--bg-color);
+            max-width: 1900px;
+            margin: 0 auto;
+            padding: 20px;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        
+        header { 
+            position: relative;
+            margin-bottom: 20px; 
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+        h1 { text-align: center; font-size: 28px; margin-bottom: 5px; color: var(--primary); transition: color 0.3s; }
+        body.dark-theme h1 { color: #f9fafb; }
+        p.subtitle { text-align: center; color: #6b7280; font-size: 14px; margin-top: 0; }
+        
+        /* Menu Button */
+        #menuBtn {
+            position: absolute;
+            top: 5px;
+            right: 10px;
+            background: var(--bg-light);
+            border: 1px solid var(--border);
+            color: var(--text-color);
+            padding: 8px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        #menuBtn:hover { background: var(--border); }
+
+        /* Responsive Layout Container */
+        .layout-container { display: flex; flex-direction: column; gap: 20px; }
+
+        /* Sticky Video Panel */
+        .video-panel {
+            position: sticky; top: 0; z-index: 100;
+            background: var(--bg-color);
+            padding-bottom: 15px; border-bottom: 2px solid var(--border);
+            transition: width 0.3s ease, max-width 0.3s ease, background-color 0.3s;
+        }
+        
+        .video-container {
+            position: relative; padding-bottom: 56.25%; height: 0; width: 100%;
+            border-radius: 8px; overflow: hidden; background: #000;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        }
+        .video-container iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+
+        /* Content Panel */
+        .content-panel { display: flex; flex-direction: column; gap: 20px; }
+
+        .timeline-section {
+            border: 1px solid var(--border); border-radius: 8px; overflow: hidden; page-break-inside: avoid;
+            background: var(--bg-color); transition: background-color 0.3s, border-color 0.3s;
+        }
+        .section-header { background-color: var(--primary); color: var(--primary-text); padding: 8px 15px; font-size: 17px; font-weight: bold; margin: 0; transition: background-color 0.3s; }
+        .section-content { padding: 10px 15px; }
+
+        /* Tree Structure CSS */
+        ul.tree, ul.tree ul { list-style: none; margin: 0; padding: 0; }
+        ul.tree ul { margin-left: 20px; padding-left: 15px; border-left: 2px solid var(--border); transition: border-color 0.3s; }
+        ul.tree li { margin: 8px 0; position: relative; }
+        ul.tree ul li::before {
+            content: ""; position: absolute; top: 12px; left: -15px;
+            width: 10px; border-top: 2px solid var(--border); transition: border-color 0.3s;
+        }
+        ul.tree ul li:last-child::after {
+            content: ""; position: absolute; top: 14px; bottom: -10px;
+            left: -17px; width: 4px; background: var(--bg-color); transition: background-color 0.3s;
+        }
+        
+        .cmd-title { font-weight: 600; font-size: 15px; color: var(--accent); transition: color 0.3s; }
+        .desc { color: #6b7280; font-size: 13.5px; }
+        body.dark-theme .desc { color: #9ca3af; }
+        
+        kbd {
+            background-color: var(--kbd-bg); border: 1px solid var(--kbd-border);
+            border-radius: 4px; border-bottom-width: 2px; color: var(--text-color);
+            font-family: Consolas, monospace; font-size: 11px; font-weight: bold;
+            padding: 2px 6px; margin: 0 2px; vertical-align: middle; transition: all 0.3s;
+        }
+        .cmd-type {
+            font-family: Consolas, monospace; background: var(--kbd-bg); color: var(--accent);
+            padding: 2px 5px; border-radius: 3px; font-size: 12px; font-weight: bold; border: 1px solid var(--kbd-border);
+            transition: all 0.3s;
+        }
+
+        .mouse-action {
+            display: inline-flex; align-items: center; background: var(--kbd-bg);
+            border: 1px solid var(--kbd-border); border-radius: 4px; border-bottom-width: 2px;
+            padding: 1px 6px 1px 4px; font-family: Consolas, monospace; font-size: 11px;
+            font-weight: bold; color: var(--text-color); vertical-align: middle; margin: 0 2px; transition: all 0.3s;
+        }
+        .mouse { width: 12px; height: 18px; margin-right: 4px; color: var(--text-color); transition: color 0.3s; }
+
+        .ts {
+            display: inline-block; font-family: Consolas, monospace; font-size: 11px;
+            color: var(--accent); background-color: var(--kbd-bg); border: 1px solid var(--kbd-border);
+            border-radius: 12px; padding: 2px 8px; margin-left: 6px; text-decoration: none;
+            vertical-align: middle; transition: all 0.2s ease; cursor: pointer; font-weight: bold;
+        }
+        .ts:hover { background-color: var(--accent); color: white; transform: translateY(-1px); }
+        .ts::before { content: "▶ "; font-size: 9px; }
+
+        /* Desktop Media Query (Landscape Mode & Large Screens) */
+        @media (min-width: 960px) {
+            .layout-container { flex-direction: row; align-items: flex-start; gap: 30px; }
+            .video-panel {
+                flex: 0 0 var(--video-width); /* Controlled by CSS variable */
+                max-width: var(--video-width);
+                top: 20px; border-bottom: none; padding-bottom: 0;
+            }
+            .content-panel { flex: 1; min-width: 0; }
+            .grid-2col { display: grid; grid-template-columns: 1fr; gap: 15px; } /* Two-column layout for sections, change to 1fr 1fr if two-column layout is desired */
+        }
+
+        /* --- MODAL (POPUP) STYLES --- */
+        .modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--modal-overlay); z-index: 2000; 
+            justify-content: center; align-items: center; backdrop-filter: blur(3px);
+        }
+        .modal {
+            background: var(--modal-bg); color: var(--text-color);
+            width: 90%; max-width: 800px; max-height: 80vh; border-radius: 12px;
+            display: flex; flex-direction: column; overflow: hidden;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            border: 1px solid var(--border); transition: all 0.3s;
+        }
+        .modal-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 15px 20px; border-bottom: 1px solid var(--border); background: var(--bg-light);
+        }
+        .modal-header h2 { margin: 0; font-size: 18px; }
+        .close-btn { background: none; border: none; font-size: 24px; color: var(--text-color); cursor: pointer; }
+        
+        .modal-body { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+        @media (min-width: 600px) { .modal-body { flex-direction: row; } }
+        
+        /* Modal Tabs */
+        .modal-tabs {
+            display: flex; flex-direction: row; border-bottom: 1px solid var(--border); background: var(--bg-light);
+        }
+        @media (min-width: 600px) {
+            .modal-tabs { flex-direction: column; width: 150px; border-bottom: none; border-right: 1px solid var(--border); }
+        }
+        .tab-btn {
+            flex: 1; padding: 15px; text-align: left; background: none; border: none; cursor: pointer;
+            color: var(--text-color); font-weight: bold; transition: background 0.2s;
+        }
+        .tab-btn.active { background: var(--modal-bg); color: var(--accent); border-left: 3px solid var(--accent); }
+        .tab-btn:hover:not(.active) { background: var(--border); }
+
+        /* Modal Content Areas */
+        .tab-content { display: none; padding: 20px; flex: 1; overflow-y: auto; }
+        .tab-content.active { display: block; }
+
+        /* Settings Controls */
+        .setting-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .setting-row label { font-weight: bold; }
+        input[type="range"] { width: 150px; cursor: pointer; }
+        
+        /* Toggle Switch */
+        .switch { position: relative; display: inline-block; width: 50px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 24px; }
+        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--accent); }
+        input:checked + .slider:before { transform: translateX(26px); }
+        body.dark-theme .slider { background-color: #4b5563; }
+        body.dark-theme input:checked + .slider { background-color: var(--accent); }
+
+        /* Chat Interface */
+        .chat-container { display: flex; flex-direction: column; height: 300px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+        .chat-messages { flex: 1; padding: 15px; overflow-y: auto; background: var(--chat-bg); display: flex; flex-direction: column; gap: 10px; }
+        .msg { max-width: 80%; padding: 10px 14px; border-radius: 18px; font-size: 14px; line-height: 1.4; }
+        .msg-user { align-self: flex-end; background: var(--chat-user); color: white; border-bottom-right-radius: 4px; }
+        .msg-bot { align-self: flex-start; background: var(--chat-bot); color: var(--text-color); border-bottom-left-radius: 4px; }
+        .chat-input-area { display: flex; padding: 10px; background: var(--bg-light); border-top: 1px solid var(--border); }
+        .chat-input-area input { flex: 1; padding: 10px; border: 1px solid var(--border); border-radius: 20px; outline: none; background: var(--modal-bg); color: var(--text-color); }
+        .chat-input-area button { background: var(--accent); color: white; border: none; padding: 0 15px; margin-left: 10px; border-radius: 20px; cursor: pointer; font-weight: bold; transition: opacity 0.2s; }
+        .chat-input-area button:hover { opacity: 0.8; }
+
+        @media print {
+            body { padding: 0; font-size: 10pt; max-width: 100%; background: white !important; color: black !important; }
+            .video-panel, #menuBtn, .modal-overlay { display: none !important; }
+            .timeline-section { border: 1px solid #000 !important; break-inside: avoid; margin-bottom: 15px; background: white !important; }
+            .section-header { background-color: #e5e7eb !important; color: #000 !important; -webkit-print-color-adjust: exact; border-bottom: 1px solid #000; }
+            ul.tree ul li:last-child::after { background: transparent !important; }
+            kbd, .mouse-action, .cmd-type { box-shadow: none !important; border: 1px solid #000 !important; background: white !important; color: black !important; }
+            .ts { border: 1px solid #000 !important; background: none !important; color: #000 !important; text-decoration: none !important; }
+            .ts::before { content: "⏱ "; color: #000 !important; }
+            svg { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            @page { margin: 1cm; }
+        }
+    </style>
+</head>
+<body>
+
+    <svg width="0" height="0" style="display:none;">
+        <defs>
+            <g id="mouse-base">
+                <path d="M12 2 C6 2 2 6 2 12 L2 24 C2 30 6 34 12 34 C18 34 22 30 22 24 L22 12 C22 6 18 2 12 2 Z" fill="none" stroke="currentColor" stroke-width="2"/>
+                <path d="M12 14 L2 14" stroke="currentColor" stroke-width="2"/>
+                <path d="M12 14 L22 14" stroke="currentColor" stroke-width="2"/>
+                <line x1="12" y1="2" x2="12" y2="14" stroke="currentColor" stroke-width="2"/>
+                <rect x="10" y="4" width="4" height="7" rx="2" fill="currentColor"/>
+            </g>
+            <path id="mouse-lmb" d="M2 12 C2 6 6 2 12 2 L12 14 L2 14 Z" fill="#3b82f6"/>
+            <path id="mouse-rmb" d="M22 12 C22 6 18 2 12 2 L12 14 L22 14 Z" fill="#3b82f6"/>
+            <rect id="mouse-mmb" x="9" y="3" width="6" height="9" rx="3" fill="#3b82f6"/>
+        </defs>
+    </svg>
+
+    <header>
+        <h1>Rhino 8: Interactive Video Cheat Sheet</h1>
+        <p class="subtitle">Click any timestamp to instantly skip the video to that demonstration.</p>
+        <button id="menuBtn">⚙️ Menu</button>
+    </header>
+
+    <div class="layout-container">
+        
+        <div class="video-panel">
+            <div class="video-container">
+                <div id="player"></div>
+            </div>
+        </div>
+
+        <div class="content-panel">
+            
+            <div class="grid-2col">
+                <div class="timeline-section">
+                    <h2 class="section-header">Part 1: UI, Camera & The Gumball</h2>
+                    <div class="section-content">
+                        <ul class="tree">
+                            <li><span class="cmd-title">Camera Controls</span>
+                                <ul>
+                                    <li><span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-rmb"/><use href="#mouse-base"/></svg> Drag</span> <span class="desc">Orbit View</span> <a class="ts" data-time="02:34">02:34</a></li>
+                                    <li><kbd>Shift</kbd> + <span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-rmb"/><use href="#mouse-base"/></svg> Drag</span> <span class="desc">Pan View</span> <a class="ts" data-time="02:42">02:42</a></li>
+                                    <li><kbd>Ctrl</kbd> + <span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-rmb"/><use href="#mouse-base"/></svg> Drag</span> <span class="desc">Smooth Zoom</span> <a class="ts" data-time="02:48">02:48</a></li>
+                                    <li><span class="cmd-type">Zs</span> <span class="desc">Zoom Selected</span> <a class="ts" data-time="03:10">03:10</a></li>
+                                </ul>
+                            </li>
+                            <li><span class="cmd-title">Viewport Management</span>
+                                <ul>
+                                    <li><span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-lmb"/><use href="#mouse-base"/></svg> Dbl-Click</span> <span class="desc">Name toggles 4-view</span> <a class="ts" data-time="03:37">03:37</a></li>
+                                    <li><span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-rmb"/><use href="#mouse-base"/></svg> Click</span> <span class="desc">Name changes display</span> <a class="ts" data-time="03:52">03:52</a></li>
+                                    <li><kbd>F7</kbd> <span class="desc">Toggle Grid visibility</span> <a class="ts" data-time="11:09">11:09</a></li>
+                                </ul>
+                            </li>
+                            <li><span class="cmd-title">Gumball Tool</span>
+                                <ul>
+                                    <li><strong>Arrows</strong> <span class="desc">Move</span> <a class="ts" data-time="05:46">05:46</a> | + <kbd>Alt</kbd> <span class="desc">Copy</span> <a class="ts" data-time="09:21">09:21</a></li>
+                                    <li><strong>Arcs</strong> <span class="desc">Rotate</span> <a class="ts" data-time="05:37">05:37</a> | + <kbd>Shift</kbd> <span class="desc">Ortho</span> <a class="ts" data-time="07:56">07:56</a></li>
+                                    <li><strong>Squares</strong> <span class="desc">Scale</span> <a class="ts" data-time="06:17">06:17</a> | + <kbd>Shift</kbd> <span class="desc">3D</span> <a class="ts" data-time="06:23">06:23</a></li>
+                                    <li><strong>Modify Gumball</strong> <span class="desc">Double-click handle repositions widget without moving object</span> <a class="ts" data-time="07:16">07:16</a></li>
+                                    <li><span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-rmb"/><use href="#mouse-base"/></svg> Click</span> <span class="desc">Gumball option: toggle Auto Reset</span> <a class="ts" data-time="06:44">06:44</a></li>
+                                </ul>
+                            </li>
+                            <li><span class="cmd-title">Core Editing & Visibility</span>
+                                <ul>
+                                    <li><kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd> <span class="desc">Undo / Redo</span> <a class="ts" data-time="08:56">08:56</a></li>
+                                    <li><kbd>Ctrl+C</kbd> / <kbd>Ctrl+V</kbd> <span class="desc">Copy / Paste</span> <a class="ts" data-time="09:12">09:12</a></li>
+                                    <li><span class="cmd-type">Invert</span>, <span class="cmd-type">Hide</span>, <span class="cmd-type">Show</span>, <span class="cmd-type">Lock</span>, <span class="cmd-type">Unlock</span> <a class="ts" data-time="09:39">09:39</a></li>
+                                </ul>
+                            </li>
+                            <li><span class="cmd-title">Selection</span>
+                                <ul>
+                                    <li><span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-lmb"/><use href="#mouse-base"/></svg> L-R / R-L Drag</span> <span class="desc">Window/Crossing</span> <a class="ts" data-time="11:23">11:23</a></li>
+                                    <li><kbd>Shift</kbd>/<kbd>Ctrl</kbd> + <span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-lmb"/><use href="#mouse-base"/></svg> Click</span> <span class="desc">Add/Remove</span> <a class="ts" data-time="11:50">11:50</a></li>
+                                </ul>
+                            </li>
+                            <li><span class="cmd-title">Precise Transform Commands</span>
+                                <ul>
+                                    <li><span class="cmd-type">Move</span> <span class="desc">Move from point A to B using snaps</span> <a class="ts" data-time="12:46">12:46</a></li>
+                                    <li><span class="cmd-type">Rotate</span> <span class="desc">Standard 2D rotation</span> <a class="ts" data-time="13:07">13:07</a></li>
+                                    <li><span class="cmd-type">Orient3Pt</span> <span class="desc">Map 3 source points to 3 target points</span> <a class="ts" data-time="14:49">14:49</a></li>
+                                </ul>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="timeline-section">
+                    <h2 class="section-header">Part 2 & 3: Geometry Hierarchy</h2>
+                    <div class="section-content">
+                        <ul class="tree">
+                            <li><span class="cmd-title">Curves to Solids</span>
+                                <ul>
+                                    <li><span class="cmd-type">Polyline</span> / <span class="cmd-type">Curve</span> <a class="ts" data-time="16:37">16:37</a></li>
+                                    <li><span class="cmd-type">Circle</span> / <span class="cmd-type">Rectangle</span> <span class="desc">Basic shape starters</span> <a class="ts" data-time="17:11">17:11</a></li>
+                                    <li><span class="cmd-type">Join</span> / <span class="cmd-type">Explode</span> <a class="ts" data-time="18:33">18:33</a></li>
+                                    <li><span class="cmd-type">ExtrudeCrv</span> <span class="desc">2D to 3D</span> <a class="ts" data-time="19:14">19:14</a></li>
+                                    <li><span class="cmd-type">Cap</span> <span class="desc">Closes holes to solid</span> <a class="ts" data-time="19:56">19:56</a></li>
+                                    <li><span class="cmd-type">PlanarSrf</span> <span class="desc">Fills flat curve</span> <a class="ts" data-time="24:44">24:44</a></li>
+                                    <li><span class="cmd-type">Trim</span> <span class="desc">Delete overlap</span> <a class="ts" data-time="25:12">25:12</a></li>
+                                    <li><span class="cmd-type">DupBorder</span> <span class="desc">Extracts surface outline curve</span> <a class="ts" data-time="25:41">25:41</a></li>
+                                </ul>
+                            </li>
+                            <li><span class="cmd-title">Points & Sub-Select</span>
+                                <ul>
+                                    <li><kbd>F10</kbd> / <kbd>F11</kbd> <span class="desc">Points On/Off</span> <a class="ts" data-time="20:47">20:47</a></li>
+                                    <li><span class="cmd-type">ConvertExtrusion</span> <a class="ts" data-time="21:49">21:49</a></li>
+                                    <li><kbd>Ctrl+Shift</kbd> + <span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-lmb"/><use href="#mouse-base"/></svg> Click</span> <span class="desc">Sub-select</span> <a class="ts" data-time="22:44">22:44</a></li>
+                                </ul>
+                            </li>
+                            <li><span class="cmd-title">Geometry Types</span>
+                                <ul>
+                                    <li><span class="cmd-title">NURBS</span> <span class="cmd-type">Rebuild</span> <a class="ts" data-time="28:33">28:33</a></li>
+                                    <li><span class="cmd-title">Meshes</span> <span class="desc">Polygonal geometry type</span> <a class="ts" data-time="31:33">31:33</a></li>
+                                    <li><span class="cmd-title">SubD</span> <kbd>Tab</kbd> <span class="desc">Toggle Smooth/Box</span> <a class="ts" data-time="33:08">33:08</a></li>
+                                    <li><span class="cmd-title">SubD</span> <kbd>Ctrl</kbd> + <strong>Drag</strong> <span class="desc">Extrude</span> <a class="ts" data-time="33:22">33:22</a></li>
+                                    <li><span class="cmd-type">Subdivide</span> <span class="desc">Split one SubD face into four faces</span> <a class="ts" data-time="35:29">35:29</a></li>
+                                </ul>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-section">
+                <h2 class="section-header">Part 4, 5 & 6: Layers & Generators</h2>
+                <div class="section-content">
+                    <div class="grid-2col">
+                        <ul class="tree">
+                            <li><span class="cmd-title">Layer Tools</span>
+                                <ul>
+                                    <li><kbd>Tab</kbd> <span class="desc">Quick-create next</span> <a class="ts" data-time="39:51">39:51</a></li>
+                                    <li><span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-rmb"/><use href="#mouse-base"/></svg> Click</span> ➔ <span class="cmd-type">Change Layer</span> <a class="ts" data-time="40:05">40:05</a></li>
+                                    <li><span class="cmd-type">Mirror</span> <span class="desc">Symmetry</span> <a class="ts" data-time="41:18">41:18</a></li>
+                                    <li><strong>Sub-layers</strong> <span class="desc">Drag layers to nest; prefix with Z_ to sort to bottom</span> <a class="ts" data-time="42:46">42:46</a></li>
+                                    <li><strong>Layer Color</strong> <span class="desc">Assign colors for organization</span> <a class="ts" data-time="44:02">44:02</a></li>
+                                    <li><strong>Layer Material</strong> <span class="desc">Assign materials at layer level</span> <a class="ts" data-time="44:48">44:48</a></li>
+                                </ul>
+                            </li>
+                            <li><span class="cmd-title">Generators</span>
+                                <ul>
+                                    <li><span class="cmd-type">Loft</span> <span class="desc">Surfaces curves</span> <a class="ts" data-time="26:04">26:04</a></li>
+                                    <li><span class="cmd-type">Revolve</span> <span class="desc">Spins curve</span> <a class="ts" data-time="38:35">38:35</a></li>
+                                    <li><span class="cmd-type">Pipe</span> <span class="desc">Tube from curve</span> <a class="ts" data-time="40:18">40:18</a></li>
+                                    <li><span class="cmd-type">Sweep1/2</span> <span class="desc">Extrude on rails</span> <a class="ts" data-time="49:42">49:42</a></li>
+                                </ul>
+                            </li>
+                        </ul>
+                        <ul class="tree">
+                            <li><span class="cmd-title">2D Editing</span>
+                                <ul>
+                                    <li><strong>Expand Tool Submenu</strong> <span class="desc">Click lower-right triangle to reveal nested tools</span> <a class="ts" data-time="54:17">54:17</a></li>
+                                    <li><span class="cmd-type">Line</span> <span class="desc">Perpendicular/Tangent to 2 Curves sub-tools</span> <a class="ts" data-time="54:42">54:42</a></li>
+                                    <li><span class="cmd-type">Spiral/Helix</span> <a class="ts" data-time="48:03">48:03</a></li>
+                                    <li><span class="cmd-type">Offset</span> <span class="desc">Expands evenly</span> <a class="ts" data-time="57:08">57:08</a></li>
+                                    <li><span class="cmd-type">CurveBoolean</span> <span class="desc">Rapid trim</span> <a class="ts" data-time="57:43">57:43</a></li>
+                                    <li><span class="cmd-type">FilletCorners</span> <span class="desc">Rounds 2D</span> <a class="ts" data-time="1:00:17">1:00:17</a></li>
+                                    <li><span class="cmd-type">Rectangle (3Pt)</span> <span class="desc">Create angled rectangles from 3 points</span> <a class="ts" data-time="1:00:46">1:00:46</a></li>
+                                    <li><span class="cmd-type">BlendCrv</span> <span class="desc">Smooth connection</span> <a class="ts" data-time="1:01:44">1:01:44</a></li>
+                                    <li><span class="cmd-type">InsertControlPoint</span> <span class="desc">Add editable points to existing curve</span> <a class="ts" data-time="1:02:28">1:02:28</a></li>
+                                </ul>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid-2col">
+                <div class="timeline-section">
+                    <h2 class="section-header">Part 7 & 8: Snaps & CPlanes</h2>
+                    <div class="section-content">
+                        <ul class="tree">
+                            <li><span class="cmd-title">Nudge (Micro-move)</span> <a class="ts" data-time="1:09:28">1:09:28</a>
+                                <ul>
+                                    <li><kbd>Arrows</kbd> <span class="desc">Normal (0.2)</span></li>
+                                    <li><kbd>Ctrl+Arrows</kbd> <span class="desc">Small (0.05)</span></li>
+                                    <li><kbd>Shift+Arrows</kbd> <span class="desc">Large</span></li>
+                                    <li><kbd>PageUp</kbd> / <kbd>PageDown</kbd> <span class="desc">Z-axis micro-move</span> <a class="ts" data-time="1:10:20">1:10:20</a></li>
+                                </ul>
+                            </li>
+                            <li><span class="cmd-title">Constraints</span>
+                                <ul>
+                                    <li><kbd>Shift</kbd> <span class="desc">Toggle Ortho</span> <a class="ts" data-time="1:06:33">1:06:33</a></li>
+                                    <li><kbd>Alt</kbd> <span class="desc">Toggle Osnaps</span></li>
+                                    <li><strong>Grid Snap</strong> <span class="desc">Locks drawing/move to grid increments</span> <a class="ts" data-time="1:10:54">1:10:54</a></li>
+                                    <li><strong>Planar Snap</strong> <span class="desc">Keeps Z-height</span> <a class="ts" data-time="1:11:56">1:11:56</a></li>
+                                </ul>
+                            </li>
+                            <li><span class="cmd-title">CPlanes & Project</span>
+                                <ul>
+                                    <li><strong>Apparent Intersections</strong> <span class="desc">Trim using view-based overlap, even if not touching in 3D</span> <a class="ts" data-time="1:16:35">1:16:35</a></li>
+                                    <li><span class="cmd-type">Project</span> <span class="desc">Onto 3D srf</span> <a class="ts" data-time="1:18:17">1:18:17</a></li>
+                                    <li><span class="cmd-type">ProjectToCPlane</span> <span class="desc">Flattens</span> <a class="ts" data-time="1:19:44">1:19:44</a></li>
+                                </ul>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="timeline-section">
+                    <h2 class="section-header">Part 9 & 10: Solid Edits</h2>
+                    <div class="section-content">
+                        <ul class="tree">
+                            <li><span class="cmd-title">Command Access & Repeat</span>
+                                <ul>
+                                    <li><span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-mmb"/><use href="#mouse-base"/></svg> Click</span> <span class="desc">Opens MMB command menu</span> <a class="ts" data-time="1:22:08">1:22:08</a></li>
+                                    <li><kbd>Ctrl</kbd> + <strong>Drag tool icon</strong> <span class="desc">Save command into MMB menu</span> <a class="ts" data-time="1:22:41">1:22:41</a></li>
+                                    <li><kbd>Space</kbd> / <kbd>Enter</kbd> / <span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-rmb"/><use href="#mouse-base"/></svg> Click</span> <span class="desc">Repeat last command</span> <a class="ts" data-time="1:23:37">1:23:37</a></li>
+                                </ul>
+                            </li>
+                            <li><span class="cmd-title">Mass Selection Commands</span>
+                                <ul>
+                                    <li><span class="cmd-type">SelCrv</span>, <span class="cmd-type">SelSrf</span>, <span class="cmd-type">SelDup</span>, <span class="cmd-type">SelLast</span> <a class="ts" data-time="1:25:43">1:25:43</a></li>
+                                </ul>
+                            </li>
+                            <li><span class="cmd-title">Splitting & Scaling</span>
+                                <ul>
+                                    <li><span class="cmd-type">Rotate3D</span> <span class="desc">Custom axis</span> <a class="ts" data-time="1:31:19">1:31:19</a></li>
+                                    <li><span class="cmd-type">Scale1D</span> <a class="ts" data-time="1:32:39">1:32:39</a></li>
+                                    <li><span class="cmd-type">Scale2D</span> <span class="desc">Scale width/depth while keeping height fixed</span> <a class="ts" data-time="1:33:22">1:33:22</a></li>
+                                    <li><span class="cmd-type">Split</span> vs <span class="cmd-type">Trim</span> <a class="ts" data-time="1:34:16">1:34:16</a></li>
+                                    <li><span class="cmd-type">InterpCrvOnSrf</span> <span class="desc">Draw curve directly on a 3D surface</span> <a class="ts" data-time="1:35:07">1:35:07</a></li>
+                                    <li><span class="cmd-type">Dir</span> <span class="desc">Shows surface normals/direction arrows</span> <a class="ts" data-time="1:36:50">1:36:50</a></li>
+                                </ul>
+                            </li>
+                            <li><span class="cmd-title">Booleans (Solids)</span>
+                                <ul>
+                                    <li><span class="cmd-type">BooleanUnion</span> <span class="desc">Fuses parts</span> <a class="ts" data-time="1:44:12">1:44:12</a></li>
+                                    <li><span class="cmd-type">BooleanDifference</span> <span class="desc">Cuts hole</span> <a class="ts" data-time="1:44:46">1:44:46</a></li>
+                                    <li><span class="cmd-type">BooleanIntersection</span> <span class="desc">Keeps overlapping volume only</span> <a class="ts" data-time="1:45:11">1:45:11</a></li>
+                                    <li><span class="cmd-type">Boolean2Objects</span> <span class="desc">Cycle and pick boolean result options</span> <a class="ts" data-time="1:45:11">1:45:11</a></li>
+                                </ul>
+                            </li>
+                            <li><span class="cmd-title">Edge Softening</span>
+                                <ul>
+                                    <li><span class="cmd-type">FilletEdge</span> <a class="ts" data-time="1:47:08">1:47:08</a></li>
+                                    <li><span class="cmd-type">ChamferEdge</span> <a class="ts" data-time="1:48:54">1:48:54</a></li>
+                                </ul>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-section">
+                <h2 class="section-header">Part 11: Arrays & Deformations</h2>
+                <div class="section-content">
+                    <ul class="tree">
+                        <li><span class="cmd-title">Repeating Geometry (Arrays)</span>
+                            <ul>
+                                <li><span class="cmd-type">ArrayLinear/Polar</span> <span class="desc">Rows or circles</span> <a class="ts" data-time="1:50:02">1:50:02</a></li>
+                                <li><span class="cmd-type">Array</span> <span class="desc">3D grid array on X, Y, and Z axes</span> <a class="ts" data-time="1:50:30">1:50:30</a></li>
+                                <li><span class="cmd-type">ArrayCrvOnSrf</span> <span class="desc">Patterns on surface</span> <a class="ts" data-time="1:52:25">1:52:25</a></li>
+                                <li><span class="cmd-type">ArraySrf</span> <span class="desc">Patterns objects using targeted surface coordinates</span> <a class="ts" data-time="1:53:24">1:53:24</a></li>
+                            </ul>
+                        </li>
+                        <li><span class="cmd-title">Global Transforms</span>
+                            <ul>
+                                <li><span class="cmd-type">FlowAlongSrf</span> <span class="desc">Warps object to surface</span> <a class="ts" data-time="1:54:26">1:54:26</a></li>
+                                <li><span class="cmd-type">History</span> <span class="desc">(Record=Yes). Parent curve updates child.</span> <a class="ts" data-time="1:55:38">1:55:38</a></li>
+                                <li><span class="cmd-type">Flow</span> <span class="desc">Flow along a curve path (1D)</span> <a class="ts" data-time="1:56:00">1:56:00</a></li>
+                                <li><span class="cmd-type">Twist/Bend/Taper</span> <span class="desc">Bending along an axis</span> <a class="ts" data-time="1:58:41">1:58:41</a></li>
+                                <li><span class="cmd-type">CageEdit</span> <span class="desc">Wraps in editable point-box to stretch</span> <a class="ts" data-time="2:00:38">2:00:38</a></li>
+                            </ul>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div id="menuModal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Menu</h2>
+                <button class="close-btn" id="closeModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-tabs">
+                    <button class="tab-btn active" data-tab="tab-info">ℹ️ Info</button>
+                    <button class="tab-btn" data-tab="tab-settings">⚙️ Settings</button>
+                    <button class="tab-btn" data-tab="tab-chat">💬 Feedback</button>
+                </div>
+                
+                <div id="tab-info" class="tab-content active">
+                    <h3>About this Tool</h3>
+                    <p>This interactive cheat sheet is designed to accompany the <b>Rhino 8: Full Beginner's Course</b> by Joe Meiser.</p>
+                    <p><b>How to use:</b> Click any blue timestamp pill to instantly jump the video to that exact command demonstration. If you resize your window, the layout will automatically adjust.</p>
+                    <p><b>Printing:</b> Press <code>Ctrl + P</code>. The CSS is configured to strip away the video, dark mode, and buttons to give you a clean, ink-saving paper reference guide.</p>
+                </div>
+
+                <div id="tab-settings" class="tab-content">
+                    <h3>Appearance Settings</h3>
+                    
+                    <div class="setting-row">
+                        <label>Dark Mode</label>
+                        <label class="switch">
+                            <input type="checkbox" id="themeToggle">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="setting-row">
+                        <label>Desktop Video Width</label>
+                        <input type="range" id="videoSizeSlider" min="40" max="80" value="70"> 
+                    </div>
+                    <p class="desc">Slide to adjust how much screen space the video takes up on desktop monitors.</p>
+                </div>
+
+                <div id="tab-chat" class="tab-content" style="display: flex; flex-direction: column;">
+                    <h3>Send Feedback</h3>
+                    <div class="chat-container">
+                        <div class="chat-messages" id="chatBox">
+                            <div class="msg msg-bot">Hello! Did you spot an error in the cheat sheet or have a feature request? Let me know!</div>
+                        </div>
+                        <div class="chat-input-area">
+                            <input type="text" id="chatInput" placeholder="Type your message...">
+                            <button id="sendBtn">Send</button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <script>
+        // --- YOUTUBE PLAYER LOGIC ---
+        var player;
+        function onYouTubeIframeAPIReady() {
+            player = new YT.Player('player', {
+                videoId: '4mVBIbX5G5k',
+                playerVars: { 'playsinline': 1, 'rel': 0 }
+            });
+        }
+
+        function parseTimeStr(timeStr) {
+            let parts = timeStr.split(':').map(Number);
+            if (parts.length === 2) return parts[0] * 60 + parts[1];
+            if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+            return 0;
+        }
+
+        document.querySelectorAll('.ts').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                if(!player || !player.seekTo) {
+                    alert("Please run this file on a local server to bypass YouTube restrictions.");
+                    return;
+                }
+                let seconds = parseTimeStr(this.getAttribute('data-time'));
+                player.seekTo(seconds, true);
+                player.playVideo();
+                
+                if (window.innerWidth < 960) {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+            });
+        });
+
+        // --- MENU MODAL LOGIC ---
+        const modal = document.getElementById('menuModal');
+        document.getElementById('menuBtn').onclick = () => modal.style.display = 'flex';
+        document.getElementById('closeModal').onclick = () => modal.style.display = 'none';
+        window.onclick = (e) => { if (e.target == modal) modal.style.display = 'none'; }
+
+        // Tab Switching
+        const tabBtns = document.querySelectorAll('.tab-btn');
+        const tabContents = document.querySelectorAll('.tab-content');
+        
+        tabBtns.forEach(btn => {
+            btn.onclick = function() {
+                tabBtns.forEach(b => b.classList.remove('active'));
+                tabContents.forEach(c => c.style.display = 'none');
+                this.classList.add('active');
+                
+                const targetId = this.getAttribute('data-tab');
+                const targetContent = document.getElementById(targetId);
+                targetContent.style.display = targetId === 'tab-chat' ? 'flex' : 'block';
+            }
+        });
+
+        // --- SETTINGS LOGIC ---
+        // Theme Toggle
+        document.getElementById('themeToggle').addEventListener('change', function() {
+            if (this.checked) {
+                document.body.classList.add('dark-theme');
+            } else {
+                document.body.classList.remove('dark-theme');
+            }
+        });
+
+        // Video Size Slider
+        document.getElementById('videoSizeSlider').addEventListener('input', function() {
+            document.documentElement.style.setProperty('--video-width', this.value + '%');
+        });
+
+        // --- CHAT LOGIC ---
+        const chatBox = document.getElementById('chatBox');
+        const chatInput = document.getElementById('chatInput');
+        const sendBtn = document.getElementById('sendBtn');
+
+        function appendMessage(text, isUser) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'msg ' + (isUser ? 'msg-user' : 'msg-bot');
+            msgDiv.textContent = text;
+            chatBox.appendChild(msgDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function handleSend() {
+            const text = chatInput.value.trim();
+            if (!text) return;
+            
+            appendMessage(text, true);
+            chatInput.value = '';
+            
+            // Simulated Bot Response
+            setTimeout(() => {
+                appendMessage("Thanks for your feedback! This is a static HTML file, so I can't actually save this to a server, but it's great for taking notes.", false);
+            }, 1000);
+        }
+
+        sendBtn.onclick = handleSend;
+        chatInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') handleSend();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rhino 8: Comprehensive Master Cheat Sheet (with Timestamps)</title>
+    <style>
+        :root {
+            --primary: #1f2937;
+            --accent: #2563eb;
+            --bg-light: #f9fafb;
+            --border: #e5e7eb;
+            --kbd-bg: #f3f4f6;
+            --kbd-border: #d1d5db;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            line-height: 1.5;
+            color: #111827;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #fff;
+        }
+        h1 { text-align: center; font-size: 28px; margin-bottom: 5px; color: var(--primary); }
+        p.subtitle { text-align: center; color: #6b7280; font-size: 14px; margin-top: 0; margin-bottom: 30px; }
+        
+        .timeline-section {
+            margin-bottom: 25px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            page-break-inside: avoid;
+        }
+        .section-header {
+            background-color: var(--primary);
+            color: white;
+            padding: 8px 15px;
+            font-size: 17px;
+            font-weight: bold;
+            margin: 0;
+            display: flex;
+            justify-content: space-between;
+        }
+        .section-content { padding: 10px 15px; }
+
+        /* Tree Structure CSS */
+        ul.tree, ul.tree ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+        ul.tree ul { margin-left: 20px; padding-left: 15px; border-left: 2px solid var(--border); }
+        ul.tree li { margin: 8px 0; position: relative; }
+        ul.tree ul li::before {
+            content: "";
+            position: absolute;
+            top: 12px;
+            left: -15px;
+            width: 10px;
+            border-top: 2px solid var(--border);
+        }
+        ul.tree ul li:last-child::after {
+            content: "";
+            position: absolute;
+            top: 14px;
+            bottom: -10px;
+            left: -17px;
+            width: 4px;
+            background: #fff;
+        }
+        
+        .cmd-title { font-weight: 600; font-size: 15px; color: var(--accent); }
+        .desc { color: #4b5563; font-size: 13.5px; }
+        
+        kbd {
+            background-color: var(--kbd-bg);
+            border: 1px solid var(--kbd-border);
+            border-radius: 4px;
+            border-bottom-width: 2px;
+            color: #374151;
+            font-family: Consolas, monospace;
+            font-size: 11px;
+            font-weight: bold;
+            padding: 2px 6px;
+            margin: 0 2px;
+            box-shadow: 0 1px 0 rgba(0,0,0,0.1);
+            vertical-align: middle;
+        }
+        .cmd-type {
+            font-family: Consolas, monospace;
+            background: #e0f2fe;
+            color: #0369a1;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        /* Mouse Action SVG Styles */
+        .mouse-action {
+            display: inline-flex;
+            align-items: center;
+            background: #f3f4f6;
+            border: 1px solid var(--kbd-border);
+            border-radius: 4px;
+            border-bottom-width: 2px;
+            padding: 1px 6px 1px 4px;
+            font-family: Consolas, monospace;
+            font-size: 11px;
+            font-weight: bold;
+            color: #374151;
+            box-shadow: 0 1px 0 rgba(0,0,0,0.1);
+            vertical-align: middle;
+            margin: 0 2px;
+        }
+        .mouse { width: 12px; height: 18px; margin-right: 4px; color: #374151; }
+
+        /* Timestamp Pill Style */
+        .ts {
+            display: inline-block;
+            font-family: Consolas, monospace;
+            font-size: 10px;
+            color: #2563eb;
+            background-color: #eff6ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 12px;
+            padding: 1px 6px;
+            margin-left: 6px;
+            text-decoration: none;
+            vertical-align: middle;
+            transition: all 0.2s ease;
+        }
+        .ts:hover {
+            background-color: #dbeafe;
+            color: #1d4ed8;
+            transform: translateY(-1px);
+        }
+        .ts::before {
+            content: "▶ ";
+            font-size: 8px;
+        }
+
+        .grid-2col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        @media print {
+            body { padding: 0; font-size: 10pt; max-width: 100%; }
+            .timeline-section { border: 1px solid #000; break-inside: avoid; margin-bottom: 15px; }
+            .section-header { background-color: #e5e7eb !important; color: #000 !important; -webkit-print-color-adjust: exact; border-bottom: 1px solid #000; }
+            ul.tree ul li:last-child::after { background: transparent; }
+            @page { margin: 1cm; }
+            kbd, .mouse-action { box-shadow: none; border: 1px solid #000; }
+            .ts { border: 1px solid #000; background: none; color: #000; text-decoration: underline; }
+            .ts::before { display: none; }
+            svg { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+    </style>
+</head>
+<body>
+
+    <svg width="0" height="0" style="display:none;">
+        <defs>
+            <g id="mouse-base">
+                <path d="M12 2 C6 2 2 6 2 12 L2 24 C2 30 6 34 12 34 C18 34 22 30 22 24 L22 12 C22 6 18 2 12 2 Z" fill="none" stroke="currentColor" stroke-width="2"/>
+                <path d="M12 14 L2 14" stroke="currentColor" stroke-width="2"/>
+                <path d="M12 14 L22 14" stroke="currentColor" stroke-width="2"/>
+                <line x1="12" y1="2" x2="12" y2="14" stroke="currentColor" stroke-width="2"/>
+                <rect x="10" y="4" width="4" height="7" rx="2" fill="currentColor"/>
+            </g>
+            <path id="mouse-lmb" d="M2 12 C2 6 6 2 12 2 L12 14 L2 14 Z" fill="#3b82f6"/>
+            <path id="mouse-rmb" d="M22 12 C22 6 18 2 12 2 L12 14 L22 14 Z" fill="#3b82f6"/>
+            <rect id="mouse-mmb" x="9" y="3" width="6" height="9" rx="3" fill="#3b82f6"/>
+        </defs>
+    </svg>
+
+    <h1>Rhino 8: Master Command Tree & Workflow Guide</h1>
+    <p class="subtitle">Interactive chronological reference. Click the blue timestamps to jump to that exact moment in the video.</p>
+
+    <div class="grid-2col">
+        <div class="timeline-section">
+            <h2 class="section-header"><span>Part 1: UI, Camera & The Gumball</span></h2>
+            <div class="section-content">
+                <ul class="tree">
+                    <li><span class="cmd-title">Camera Controls</span>
+                        <ul>
+                            <li><span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-rmb"/><use href="#mouse-base"/></svg> Drag</span> <span class="desc">Orbit View</span> <a href="https://youtu.be/4mVBIbX5G5k?t=2m34s" target="_blank" class="ts">02:34</a></li>
+                            <li><kbd>Shift</kbd> + <span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-rmb"/><use href="#mouse-base"/></svg> Drag</span> <span class="desc">Pan View</span> <a href="https://youtu.be/4mVBIbX5G5k?t=2m42s" target="_blank" class="ts">02:42</a></li>
+                            <li><kbd>Ctrl</kbd> + <span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-rmb"/><use href="#mouse-base"/></svg> Drag</span> <span class="desc">Smooth Zoom</span> <a href="https://youtu.be/4mVBIbX5G5k?t=2m48s" target="_blank" class="ts">02:48</a></li>
+                            <li><span class="cmd-type">Zs</span> <span class="desc">Zoom Selected (centers view)</span> <a href="https://youtu.be/4mVBIbX5G5k?t=3m10s" target="_blank" class="ts">03:10</a></li>
+                        </ul>
+                    </li>
+                    <li><span class="cmd-title">Viewport Management</span>
+                        <ul>
+                            <li><span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-lmb"/><use href="#mouse-base"/></svg> Dbl-Click</span> <span class="desc">Name toggles max/4-view</span> <a href="https://youtu.be/4mVBIbX5G5k?t=3m37s" target="_blank" class="ts">03:37</a></li>
+                            <li><span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-rmb"/><use href="#mouse-base"/></svg> Click</span> <span class="desc">Name changes shading display</span> <a href="https://youtu.be/4mVBIbX5G5k?t=3m52s" target="_blank" class="ts">03:52</a></li>
+                            <li><kbd>F7</kbd> <span class="desc">Toggles Grid visibility</span> <a href="https://youtu.be/4mVBIbX5G5k?t=11m09s" target="_blank" class="ts">11:09</a></li>
+                        </ul>
+                    </li>
+                    <li><span class="cmd-title">Gumball Tool</span> <span class="desc">(Transform Widget)</span>
+                        <ul>
+                            <li><strong>Drag Arrows</strong> <span class="desc">Move object along axis</span> <a href="https://youtu.be/4mVBIbX5G5k?t=5m46s" target="_blank" class="ts">05:46</a>
+                                <ul>
+                                    <li>+ Tap <kbd>Alt</kbd> <span class="desc">Duplicates object</span> <a href="https://youtu.be/4mVBIbX5G5k?t=9m21s" target="_blank" class="ts">09:21</a></li>
+                                </ul>
+                            </li>
+                            <li><strong>Drag Arcs</strong> <span class="desc">Rotate object</span> <a href="https://youtu.be/4mVBIbX5G5k?t=5m37s" target="_blank" class="ts">05:37</a>
+                                <ul>
+                                    <li>+ Hold <kbd>Shift</kbd> <span class="desc">Constrains to Ortho 90°</span> <a href="https://youtu.be/4mVBIbX5G5k?t=7m56s" target="_blank" class="ts">07:56</a></li>
+                                </ul>
+                            </li>
+                            <li><strong>Drag Squares</strong> <span class="desc">1D Scale (stretches 1 axis)</span> <a href="https://youtu.be/4mVBIbX5G5k?t=6m17s" target="_blank" class="ts">06:17</a>
+                                <ul>
+                                    <li>+ Hold <kbd>Shift</kbd> <span class="desc">Uniform 3D Scale</span> <a href="https://youtu.be/4mVBIbX5G5k?t=6m23s" target="_blank" class="ts">06:23</a></li>
+                                </ul>
+                            </li>
+                            <li><strong>Modify Gumball</strong>
+                                <ul>
+                                    <li><span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-lmb"/><use href="#mouse-base"/></svg> Dbl-Click</span> handle <span class="desc">Moves Gumball only</span> <a href="https://youtu.be/4mVBIbX5G5k?t=7m16s" target="_blank" class="ts">07:16</a></li>
+                                    <li><span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-rmb"/><use href="#mouse-base"/></svg> Click</span> Menu icon <span class="desc">Toggle "Auto Reset"</span> <a href="https://youtu.be/4mVBIbX5G5k?t=6m44s" target="_blank" class="ts">06:44</a></li>
+                                </ul>
+                            </li>
+                        </ul>
+                    </li>
+                    <li><span class="cmd-title">Selection & Visibility</span>
+                        <ul>
+                            <li><span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-lmb"/><use href="#mouse-base"/></svg> L-R Drag</span> <span class="desc">Window select</span> <a href="https://youtu.be/4mVBIbX5G5k?t=11m23s" target="_blank" class="ts">11:23</a></li>
+                            <li><span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-lmb"/><use href="#mouse-base"/></svg> R-L Drag</span> <span class="desc">Crossing select</span> <a href="https://youtu.be/4mVBIbX5G5k?t=11m30s" target="_blank" class="ts">11:30</a></li>
+                            <li><kbd>Shift</kbd> / <kbd>Ctrl</kbd> + <span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-lmb"/><use href="#mouse-base"/></svg> Click</span> <span class="desc">Add/Remove</span> <a href="https://youtu.be/4mVBIbX5G5k?t=11m50s" target="_blank" class="ts">11:50</a></li>
+                            <li><kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd> <span class="desc">Undo / Redo</span> <a href="https://youtu.be/4mVBIbX5G5k?t=8m56s" target="_blank" class="ts">08:56</a></li>
+                            <li><kbd>Ctrl+C</kbd> / <kbd>Ctrl+V</kbd> <span class="desc">Copy / Paste</span> <a href="https://youtu.be/4mVBIbX5G5k?t=9m12s" target="_blank" class="ts">09:12</a></li>
+                            <li><span class="cmd-type">Invert</span> + <span class="cmd-type">Hide</span> / <span class="cmd-type">Lock</span> <span class="desc">Isolate/Lock items</span> <a href="https://youtu.be/4mVBIbX5G5k?t=9m39s" target="_blank" class="ts">09:39</a></li>
+                            <li><span class="cmd-type">Show</span> / <span class="cmd-type">Unlock</span> <span class="desc">Restore items</span> <a href="https://youtu.be/4mVBIbX5G5k?t=9m48s" target="_blank" class="ts">09:48</a></li>
+                        </ul>
+                    </li>
+                    <li><span class="cmd-title">Precise Moving</span>
+                        <ul>
+                            <li><span class="cmd-type">Move</span> <span class="desc">Move from Pt A to Pt B via Snaps</span> <a href="https://youtu.be/4mVBIbX5G5k?t=12m46s" target="_blank" class="ts">12:46</a></li>
+                            <li><span class="cmd-type">Rotate</span> <span class="desc">Aligns to 2D CPlane</span> <a href="https://youtu.be/4mVBIbX5G5k?t=13m07s" target="_blank" class="ts">13:07</a></li>
+                            <li><span class="cmd-type">Orient3Pt</span> <span class="desc">Align 3 source ➔ 3 targets</span> <a href="https://youtu.be/4mVBIbX5G5k?t=14m49s" target="_blank" class="ts">14:49</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="timeline-section">
+            <h2 class="section-header"><span>Part 2 & 3: Geometry Hierarchy</span></h2>
+            <div class="section-content">
+                <ul class="tree">
+                    <li><span class="cmd-title">Curves to Solids</span>
+                        <ul>
+                            <li><span class="cmd-type">Polyline</span> / <span class="cmd-type">Curve</span> / <span class="cmd-type">Circle</span> <a href="https://youtu.be/4mVBIbX5G5k?t=16m37s" target="_blank" class="ts">16:37</a></li>
+                            <li><span class="cmd-type">Explode</span> <span class="desc">Breaks Polysurfaces</span> <a href="https://youtu.be/4mVBIbX5G5k?t=17m53s" target="_blank" class="ts">17:53</a></li>
+                            <li><span class="cmd-type">Join</span> <span class="desc">Combines touching parts</span> <a href="https://youtu.be/4mVBIbX5G5k?t=18m33s" target="_blank" class="ts">18:33</a></li>
+                            <li><span class="cmd-type">ExtrudeCrv</span> <span class="desc">Pulls 2D lines into 3D</span> <a href="https://youtu.be/4mVBIbX5G5k?t=19m14s" target="_blank" class="ts">19:14</a></li>
+                            <li><span class="cmd-type">Cap</span> <span class="desc">Closes flat holes into a solid</span> <a href="https://youtu.be/4mVBIbX5G5k?t=19m56s" target="_blank" class="ts">19:56</a></li>
+                            <li><span class="cmd-type">PlanarSrf</span> <span class="desc">Fills flat 2D curve with surface</span> <a href="https://youtu.be/4mVBIbX5G5k?t=24m44s" target="_blank" class="ts">24:44</a></li>
+                            <li><span class="cmd-type">Trim</span> <span class="desc">Delete intersecting overlap</span> <a href="https://youtu.be/4mVBIbX5G5k?t=25m12s" target="_blank" class="ts">25:12</a></li>
+                            <li><span class="cmd-type">DupBorder</span> <span class="desc">Extracts surface outline</span> <a href="https://youtu.be/4mVBIbX5G5k?t=25m41s" target="_blank" class="ts">25:41</a></li>
+                        </ul>
+                    </li>
+                    <li><span class="cmd-title">Control Points & Sub-Select</span>
+                        <ul>
+                            <li><kbd>F10</kbd> (or <span class="cmd-type">PointsOn</span>) <span class="desc">Editable points</span> <a href="https://youtu.be/4mVBIbX5G5k?t=20m47s" target="_blank" class="ts">20:47</a></li>
+                            <li><kbd>F11</kbd> (or <span class="cmd-type">PointsOff</span>) <span class="desc">Hide points</span> <a href="https://youtu.be/4mVBIbX5G5k?t=21m06s" target="_blank" class="ts">21:06</a></li>
+                            <li><span class="cmd-type">ConvertExtrusion</span> <span class="desc">Fixes simple extrusions</span> <a href="https://youtu.be/4mVBIbX5G5k?t=21m49s" target="_blank" class="ts">21:49</a></li>
+                            <li><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-lmb"/><use href="#mouse-base"/></svg> Click</span> <span class="desc">Sub-select 1 face</span> <a href="https://youtu.be/4mVBIbX5G5k?t=22m44s" target="_blank" class="ts">22:44</a></li>
+                        </ul>
+                    </li>
+                    <li><span class="cmd-title">NURBS vs Meshes vs SubD</span>
+                        <ul>
+                            <li><span class="cmd-title">NURBS</span> <span class="desc">Smooth, exact math geometry</span>
+                                <ul>
+                                    <li><span class="cmd-type">Rebuild</span> <span class="desc">Changes Point Count/Degree</span> <a href="https://youtu.be/4mVBIbX5G5k?t=28m33s" target="_blank" class="ts">28:33</a></li>
+                                </ul>
+                            </li>
+                            <li><span class="cmd-title">Meshes</span> <span class="desc">Polygonal geometry</span> <a href="https://youtu.be/4mVBIbX5G5k?t=31m33s" target="_blank" class="ts">31:33</a></li>
+                            <li><span class="cmd-title">SubD</span> <span class="desc">Organic, clay geometry</span>
+                                <ul>
+                                    <li><kbd>Tab</kbd> <span class="desc">Toggle Smooth/Box mode</span> <a href="https://youtu.be/4mVBIbX5G5k?t=33m08s" target="_blank" class="ts">33:08</a></li>
+                                    <li><kbd>Ctrl</kbd> + <strong>Drag</strong> <span class="desc">Extrudes SubD face</span> <a href="https://youtu.be/4mVBIbX5G5k?t=33m22s" target="_blank" class="ts">33:22</a></li>
+                                    <li><span class="cmd-type">Subdivide</span> <span class="desc">Breaks 1 face into 4</span> <a href="https://youtu.be/4mVBIbX5G5k?t=35m29s" target="_blank" class="ts">35:29</a></li>
+                                </ul>
+                            </li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="timeline-section">
+        <h2 class="section-header"><span>Part 4, 5 & 6: Layers, Submenus & 2D to 3D Forms</span></h2>
+        <div class="section-content">
+            <div class="grid-2col">
+                <ul class="tree">
+                    <li><span class="cmd-title">Layer Management & Tools</span>
+                        <ul>
+                            <li><kbd>Tab</kbd> <span class="desc">Quick-create next layer</span> <a href="https://youtu.be/4mVBIbX5G5k?t=39m51s" target="_blank" class="ts">39:51</a></li>
+                            <li><span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-rmb"/><use href="#mouse-base"/></svg> Click</span> Layer ➔ <span class="cmd-type">Change Object Layer</span> <a href="https://youtu.be/4mVBIbX5G5k?t=40m05s" target="_blank" class="ts">40:05</a></li>
+                            <li><strong>Sub-layers</strong> <span class="desc">Prefix "Z_" to sort to bottom.</span> <a href="https://youtu.be/4mVBIbX5G5k?t=42m46s" target="_blank" class="ts">42:46</a></li>
+                            <li><span class="cmd-type">Mirror</span> <span class="desc">Replicates across axis</span> <a href="https://youtu.be/4mVBIbX5G5k?t=41m18s" target="_blank" class="ts">41:18</a></li>
+                            <li><strong>Materials</strong> <span class="desc">Visible in Rendered Mode</span> <a href="https://youtu.be/4mVBIbX5G5k?t=44m48s" target="_blank" class="ts">44:48</a></li>
+                        </ul>
+                    </li>
+                    <li><span class="cmd-title">Curve to 3D Generators</span>
+                        <ul>
+                            <li><span class="cmd-type">Loft</span> <span class="desc">Surfaces multiple curves</span> <a href="https://youtu.be/4mVBIbX5G5k?t=26m04s" target="_blank" class="ts">26:04</a></li>
+                            <li><span class="cmd-type">Revolve</span> <span class="desc">Spins curve around axis</span> <a href="https://youtu.be/4mVBIbX5G5k?t=38m35s" target="_blank" class="ts">38:35</a></li>
+                            <li><span class="cmd-type">Pipe</span> <span class="desc">Turns curve into a tube</span> <a href="https://youtu.be/4mVBIbX5G5k?t=40m18s" target="_blank" class="ts">40:18</a></li>
+                            <li><span class="cmd-type">Sweep1</span> <span class="desc">Extrudes along 1 rail</span> <a href="https://youtu.be/4mVBIbX5G5k?t=49m42s" target="_blank" class="ts">49:42</a></li>
+                            <li><span class="cmd-type">Sweep2</span> <span class="desc">Extrudes bridging 2 rails</span> <a href="https://youtu.be/4mVBIbX5G5k?t=52m27s" target="_blank" class="ts">52:27</a></li>
+                        </ul>
+                    </li>
+                </ul>
+                <ul class="tree">
+                    <li><span class="cmd-title">2D Editing & Submenus</span>
+                        <ul>
+                            <li><span class="cmd-type">Spiral</span> / <span class="cmd-type">Helix</span> <a href="https://youtu.be/4mVBIbX5G5k?t=48m03s" target="_blank" class="ts">48:03</a> / <a href="https://youtu.be/4mVBIbX5G5k?t=1h01m19s" target="_blank" class="ts">1:01:19</a></li>
+                            <li><span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-lmb"/><use href="#mouse-base"/></svg> Click</span> Corner Triangle <span class="desc">Expands nested tools</span> <a href="https://youtu.be/4mVBIbX5G5k?t=54m17s" target="_blank" class="ts">54:17</a></li>
+                            <li><span class="cmd-type">Line</span> ➔ <span class="desc">Perpendicular/Tangent to 2 Curves</span> <a href="https://youtu.be/4mVBIbX5G5k?t=54m42s" target="_blank" class="ts">54:42</a></li>
+                            <li><span class="cmd-type">Offset</span> <span class="desc">Expands curve evenly</span> <a href="https://youtu.be/4mVBIbX5G5k?t=57m08s" target="_blank" class="ts">57:08</a></li>
+                            <li><span class="cmd-type">CurveBoolean</span> <span class="desc">Rapid trim regions</span> <a href="https://youtu.be/4mVBIbX5G5k?t=57m43s" target="_blank" class="ts">57:43</a></li>
+                            <li><span class="cmd-type">FilletCorners</span> <span class="desc">Rounds 2D corners</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h00m17s" target="_blank" class="ts">1:00:17</a></li>
+                            <li><span class="cmd-type">Rectangle (3pt)</span> <span class="desc">Angled rect</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h00m46s" target="_blank" class="ts">1:00:46</a></li>
+                            <li><span class="cmd-type">BlendCrv</span> <span class="desc">Smooth curve connection</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h01m44s" target="_blank" class="ts">1:01:44</a></li>
+                            <li><span class="cmd-type">InsertControlPoint</span> <span class="desc">Adds points</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h02m28s" target="_blank" class="ts">1:02:28</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid-2col">
+        <div class="timeline-section">
+            <h2 class="section-header"><span>Part 7 & 8: Snaps, Aids & CPlanes</span></h2>
+            <div class="section-content">
+                <ul class="tree">
+                    <li><span class="cmd-title">Nudge (Micro-movement)</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h09m28s" target="_blank" class="ts">1:09:28</a>
+                        <ul>
+                            <li><kbd>Arrows</kbd> <span class="desc">Normal Nudge (0.2)</span></li>
+                            <li><kbd>Ctrl</kbd> + <kbd>Arrows</kbd> <span class="desc">Small Nudge (0.05)</span></li>
+                            <li><kbd>Shift</kbd> + <kbd>Arrows</kbd> <span class="desc">Large Nudge</span></li>
+                            <li><kbd>PageUp</kbd> / <kbd>PageDown</kbd> <span class="desc">Z-axis</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h10m20s" target="_blank" class="ts">1:10:20</a></li>
+                        </ul>
+                    </li>
+                    <li><span class="cmd-title">Snaps & Constraints</span>
+                        <ul>
+                            <li><kbd>Shift</kbd> <span class="desc">Temporarily toggles Ortho</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h06m33s" target="_blank" class="ts">1:06:33</a></li>
+                            <li><kbd>Alt</kbd> <span class="desc">Temporarily toggles Osnaps on/off</span></li>
+                            <li><strong>Grid Snap</strong> <span class="desc">Locks to grid units</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h10m54s" target="_blank" class="ts">1:10:54</a></li>
+                            <li><strong>Planar Snap</strong> <span class="desc">Stops clicks plunging to CPlane</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h11m56s" target="_blank" class="ts">1:11:56</a></li>
+                        </ul>
+                    </li>
+                    <li><span class="cmd-title">Construction Planes (CPlanes)</span>
+                        <ul>
+                            <li><span class="desc">Top=XY, Front=ZX, Right=ZY.</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h12m56s" target="_blank" class="ts">1:12:56</a></li>
+                            <li><span class="cmd-type">Trim</span> ➔ <span class="desc">Apparent Intersections=Yes</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h16m35s" target="_blank" class="ts">1:16:35</a></li>
+                            <li><span class="cmd-type">Project</span> <span class="desc">Curve onto 3D surface</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h18m17s" target="_blank" class="ts">1:18:17</a></li>
+                            <li><span class="cmd-type">ProjectToCPlane</span> <span class="desc">Flattens 3D curve</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h19m44s" target="_blank" class="ts">1:19:44</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="timeline-section">
+            <h2 class="section-header"><span>Part 9 & 10: Advanced Solid Edits</span></h2>
+            <div class="section-content">
+                <ul class="tree">
+                    <li><span class="cmd-title">Shortcuts & Customization</span>
+                        <ul>
+                            <li><kbd>Space</kbd> / <kbd>Enter</kbd> / <span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-rmb"/><use href="#mouse-base"/></svg> Click</span> <span class="desc">Repeat</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h23m37s" target="_blank" class="ts">1:23:37</a></li>
+                            <li><span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-mmb"/><use href="#mouse-base"/></svg> Click</span> <span class="desc">Opens Quick Menu</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h22m08s" target="_blank" class="ts">1:22:08</a></li>
+                            <li><kbd>Ctrl</kbd> + <span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-lmb"/><use href="#mouse-base"/></svg> Drag</span> <span class="desc">Saves icon to MMB Menu</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h22m41s" target="_blank" class="ts">1:22:41</a></li>
+                            <li><span class="cmd-type">SelCrv</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h25m43s" target="_blank" class="ts">1:25:43</a> | <span class="cmd-type">SelDup</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h26m21s" target="_blank" class="ts">1:26:21</a> | <span class="cmd-type">SelLast</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h26m41s" target="_blank" class="ts">1:26:41</a></li>
+                        </ul>
+                    </li>
+                    <li><span class="cmd-title">Splitting, Scaling & Booleans</span>
+                        <ul>
+                            <li><span class="cmd-type">Rotate3D</span> <span class="desc">Rotates on custom axis</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h31m19s" target="_blank" class="ts">1:31:19</a></li>
+                            <li><span class="cmd-type">Scale1D</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h32m39s" target="_blank" class="ts">1:32:39</a> / <span class="cmd-type">Scale2D</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h33m22s" target="_blank" class="ts">1:33:22</a></li>
+                            <li><span class="cmd-type">Dir</span> <span class="desc">Displays Surface Normals</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h36m50s" target="_blank" class="ts">1:36:50</a></li>
+                            <li><span class="cmd-type">InterpCrvOnSrf</span> <span class="desc">Draws curve on surface</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h35m07s" target="_blank" class="ts">1:35:07</a></li>
+                            <li><span class="cmd-type">Split</span> vs <span class="cmd-type">Trim</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h34m16s" target="_blank" class="ts">1:34:16</a></li>
+                            <li><span class="cmd-title">Booleans</span> <span class="desc">(Requires closed solids)</span>
+                                <ul>
+                                    <li><span class="cmd-type">BooleanUnion</span> <span class="desc">Fuses parts</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h44m12s" target="_blank" class="ts">1:44:12</a></li>
+                                    <li><span class="cmd-type">BooleanDifference</span> <span class="desc">Carves holes</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h44m46s" target="_blank" class="ts">1:44:46</a></li>
+                                    <li><span class="cmd-type">BooleanIntersection</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h45m11s" target="_blank" class="ts">1:45:11</a> / <span class="cmd-type">Boolean2Objects</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h45m32s" target="_blank" class="ts">1:45:32</a></li>
+                                </ul>
+                            </li>
+                            <li><span class="cmd-type">FilletEdge</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h47m08s" target="_blank" class="ts">1:47:08</a> / <span class="cmd-type">ChamferEdge</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h48m54s" target="_blank" class="ts">1:48:54</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="timeline-section">
+        <h2 class="section-header"><span>Part 11: Arrays, Flow & Cage Deformations</span></h2>
+        <div class="section-content">
+            <ul class="tree">
+                <li><span class="cmd-title">Repeating Geometry (Arrays)</span>
+                    <ul>
+                        <li><span class="cmd-type">ArrayLinear</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h50m02s" target="_blank" class="ts">1:50:02</a> / <span class="cmd-type">Array</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h50m30s" target="_blank" class="ts">1:50:30</a> / <span class="cmd-type">ArrayPolar</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h51m34s" target="_blank" class="ts">1:51:34</a></li>
+                        <li><span class="cmd-type">ArrayCrvOnSrf</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h52m25s" target="_blank" class="ts">1:52:25</a> / <span class="cmd-type">ArraySrf</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h53m24s" target="_blank" class="ts">1:53:24</a></li>
+                    </ul>
+                </li>
+                <li><span class="cmd-title">Global Flow & History</span>
+                    <ul>
+                        <li><span class="cmd-type">FlowAlongSrf</span> <span class="desc">Warps object to wrap identically over organic surface</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h54m26s" target="_blank" class="ts">1:54:26</a></li>
+                        <li><span class="cmd-type">History</span> <span class="desc">(Record=Yes). Modifying parent updates child.</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h55m38s" target="_blank" class="ts">1:55:38</a></li>
+                    </ul>
+                </li>
+                <li><span class="cmd-title">Deformations</span>
+                    <ul>
+                        <li><span class="cmd-type">Twist</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h58m41s" target="_blank" class="ts">1:58:41</a> / <span class="cmd-type">Bend</span> <a href="https://youtu.be/4mVBIbX5G5k?t=1h59m18s" target="_blank" class="ts">1:59:18</a> / <span class="cmd-type">Taper</span> <a href="https://youtu.be/4mVBIbX5G5k?t=2h00m02s" target="_blank" class="ts">2:00:02</a> <span class="desc">Global deformations along an axis</span></li>
+                        <li><span class="cmd-type">CageEdit</span> <span class="desc">Wraps objects in editable point-box (BoundingBox > World > 4,4,4)</span> <a href="https://youtu.be/4mVBIbX5G5k?t=2h00m38s" target="_blank" class="ts">2:00:38</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+</body>
+</html>

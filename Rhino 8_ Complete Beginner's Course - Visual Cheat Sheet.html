@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<!-- saved from url=(0064)file:///C:/Users/Jairm/Documents/vscode/html/rhino8_hotkeys.html -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rhino 8: Complete Beginner's Course - Visual Cheat Sheet</title>
+    <style>
+        :root {
+            --border-color: #d1d5db;
+            --bg-light: #f9fafb;
+            --header-bg: #1f2937;
+            --header-text: #ffffff;
+            --kbd-bg: #f3f4f6;
+            --kbd-border: #9ca3af;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.4;
+            color: #111827;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 { text-align: center; font-size: 24px; margin-bottom: 5px; }
+        h2 { font-size: 18px; color: #374151; margin-top: 25px; border-bottom: 2px solid var(--border-color); padding-bottom: 5px; }
+        p.subtitle { text-align: center; color: #6b7280; font-size: 14px; margin-top: 0; margin-bottom: 20px; }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+            font-size: 12px;
+        }
+        th, td {
+            border: 1px solid var(--border-color);
+            padding: 8px;
+            text-align: left;
+            vertical-align: top;
+        }
+        th {
+            background-color: var(--header-bg);
+            color: var(--header-text);
+            font-weight: 600;
+        }
+        tr:nth-child(even) { background-color: var(--bg-light); }
+        
+        kbd {
+            background-color: var(--kbd-bg);
+            border: 1px solid var(--kbd-border);
+            border-radius: 4px;
+            box-shadow: 0 2px 0 rgba(0,0,0,0.2);
+            color: #333;
+            display: inline-block;
+            font-family: Consolas, Monaco, monospace;
+            font-size: 11px;
+            font-weight: bold;
+            padding: 2px 6px;
+            white-space: nowrap;
+            margin: 1px;
+        }
+        .cmd {
+            font-family: Consolas, Monaco, monospace;
+            color: #2563eb;
+            font-weight: bold;
+        }
+        .mouse {
+            display: inline-flex;
+            align-items: center;
+            border: 1px solid var(--kbd-border);
+            border-radius: 10px 10px 15px 15px;
+            padding: 2px 6px;
+            background: #fff;
+            font-size: 10px;
+            font-weight: bold;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .mouse-icon { margin-right: 4px; font-size: 12px; }
+
+        @media print {
+            body { padding: 0; font-size: 10pt; max-width: 100%; }
+            kbd { box-shadow: none; border: 1px solid #000; }
+            table { page-break-inside: auto; font-size: 10pt; }
+            tr { page-break-inside: avoid; page-break-after: auto; }
+            h2 { page-break-after: avoid; margin-top: 15px; }
+            th { background-color: #e5e7eb !important; color: #000 !important; -webkit-print-color-adjust: exact; }
+            @page { margin: 1cm; }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Rhino 8: Full Beginner's Course Reference</h1>
+    <p class="subtitle">Chronological Visual Cheat Sheet &amp; Technical Guide</p>
+
+    <h2>Part 1: UI, Navigation &amp; Moving Geometry</h2>
+    <table>
+        <thead><tr><th width="15%">Action</th><th width="20%">Inputs</th><th width="35%">What Happens (Output)</th><th width="30%">Why Use It?</th></tr></thead>
+        <tbody>
+            <tr>
+                <td><strong>Orbit</strong></td>
+                <td><span class="mouse"><span class="mouse-icon">🖱️</span>Right-Drag</span></td>
+                <td>Camera rotates continuously around the viewing center.</td>
+                <td>To inspect the 3D model from different angles.</td>
+            </tr>
+            <tr>
+                <td><strong>Pan</strong></td>
+                <td><kbd>Shift</kbd> + <span class="mouse"><span class="mouse-icon">🖱️</span>Right-Drag</span></td>
+                <td>Camera slides left/right or up/down without rotating.</td>
+                <td>To shift your field of view across the workspace.</td>
+            </tr>
+            <tr>
+                <td><strong>Zoom</strong></td>
+                <td><kbd>Ctrl</kbd> + <span class="mouse"><span class="mouse-icon">🖱️</span>Right-Drag</span><br><em>or Scroll Wheel</em></td>
+                <td>Camera scales in/out smoothly.</td>
+                <td>To get closer to fine details or see the whole scene.</td>
+            </tr>
+            <tr>
+                <td><strong>Zoom Selected</strong></td>
+                <td><span class="cmd">Zs</span> + <kbd>Enter</kbd></td>
+                <td>Viewport centers directly on the currently selected object.</td>
+                <td>To find lost geometry or rotate specifically around one part.</td>
+            </tr>
+            <tr>
+                <td><strong>Toggle Viewport</strong></td>
+                <td><span class="mouse"><span class="mouse-icon">🖱️</span>Double-Click</span> <em>Name</em></td>
+                <td>Expands one viewport to full screen, or returns to 4-view.</td>
+                <td>To switch between working in 2D (Top/Front) and 3D (Persp).</td>
+            </tr>
+            <tr>
+                <td><strong>Gumball</strong></td>
+                <td><em>Toggle button at bottom</em></td>
+                <td>Widget appears on object: Arrows (Move), Arcs (Rotate), Squares (Scale).</td>
+                <td>For fast, intuitive transformations without typing commands.</td>
+            </tr>
+            <tr>
+                <td><strong>Move</strong></td>
+                <td><span class="cmd">Move</span> + <kbd>Enter</kbd></td>
+                <td>Relocates geometry from a precise Point A to Point B.</td>
+                <td>When Gumball isn't accurate enough; ensures perfect snapping.</td>
+            </tr>
+            <tr>
+                <td><strong>Orient 3-Point</strong></td>
+                <td><span class="cmd">Orient3Pt</span> + <kbd>Enter</kbd></td>
+                <td>Aligns an object by matching 3 source points to 3 target points.</td>
+                <td>To accurately place complex objects on angled surfaces.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2>Part 2: Basic Geometry &amp; Curves</h2>
+    <table>
+        <thead><tr><th width="15%">Command</th><th width="20%">Inputs</th><th width="35%">What Happens (Output)</th><th width="30%">Why Use It?</th></tr></thead>
+        <tbody>
+            <tr>
+                <td><strong>Points On</strong></td>
+                <td><kbd>F10</kbd></td>
+                <td>Control points/vertices become visible and selectable.</td>
+                <td>To manually deform the shape of a curve or single surface.</td>
+            </tr>
+            <tr>
+                <td><strong>Points Off</strong></td>
+                <td><kbd>F11</kbd></td>
+                <td>Control points are hidden.</td>
+                <td>To lock in edits and return to normal object selection.</td>
+            </tr>
+            <tr>
+                <td><strong>Sub-Select</strong></td>
+                <td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <span class="mouse"><span class="mouse-icon">🖱️</span>Click</span></td>
+                <td>Selects a single face, edge, or point of a joined polysurface.</td>
+                <td>To modify a specific part of a solid without exploding it first.</td>
+            </tr>
+            <tr>
+                <td><strong>Join / Explode</strong></td>
+                <td><span class="cmd">Join</span> / <span class="cmd">Explode</span></td>
+                <td>Connects touching edges into one unit / breaks units apart.</td>
+                <td>To prep curves for extruding, or to break a box into flat planes.</td>
+            </tr>
+            <tr>
+                <td><strong>Extrude Curve</strong></td>
+                <td><span class="cmd">ExtrudeCrv</span> + <kbd>Enter</kbd></td>
+                <td>Pulls a 2D line into a 3D surface (open) or solid (closed).</td>
+                <td>To give 2D sketches depth (e.g., floorplan to walls).</td>
+            </tr>
+            <tr>
+                <td><strong>Cap</strong></td>
+                <td><span class="cmd">Cap</span> + <kbd>Enter</kbd></td>
+                <td>Fills flat, planar open holes on polysurfaces.</td>
+                <td>To turn an open shape into a "watertight" solid for 3D printing.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2>Part 3: Geometry Types (NURBS, Mesh, SubD)</h2>
+    <table>
+        <thead><tr><th width="15%">Concept</th><th width="20%">Inputs / Commands</th><th width="35%">What Happens (Output)</th><th width="30%">Why Use It?</th></tr></thead>
+        <tbody>
+            <tr>
+                <td><strong>NURBS</strong></td>
+                <td><span class="cmd">Rebuild</span></td>
+                <td>Math-driven geometry. Outputs infinitely smooth curves/surfaces.</td>
+                <td>Default for CAD. Best for exact manufacturing and hard edges.</td>
+            </tr>
+            <tr>
+                <td><strong>Meshes</strong></td>
+                <td><em>Mesh Tools panel</em></td>
+                <td>Geometry made of flat polygon faces (vertices/edges).</td>
+                <td>Used for 3D scanning or exporting to game engines/zBrush.</td>
+            </tr>
+            <tr>
+                <td><strong>SubD</strong></td>
+                <td><kbd>Tab</kbd> <em>(Toggles smooth/box)</em></td>
+                <td>Organic, clay-like geometry. Extrude faces with <kbd>Ctrl</kbd>+Drag.</td>
+                <td>Best for highly organic, continuous forms (furniture, creatures).</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2>Part 4: Layers &amp; Materials</h2>
+    <table>
+        <thead><tr><th width="15%">Command</th><th width="20%">Inputs</th><th width="35%">What Happens (Output)</th><th width="30%">Why Use It?</th></tr></thead>
+        <tbody>
+            <tr>
+                <td><strong>Revolve</strong></td>
+                <td><span class="cmd">Revolve</span> + <kbd>Enter</kbd></td>
+                <td>Spins a profile curve around an axis to make a 3D surface.</td>
+                <td>To make cylindrical/symmetrical objects like lightbulbs or vases.</td>
+            </tr>
+            <tr>
+                <td><strong>Mirror</strong></td>
+                <td><span class="cmd">Mirror</span> + <kbd>Enter</kbd></td>
+                <td>Creates an exact replica across a defined line.</td>
+                <td>To build symmetrical objects instantly without drawing twice.</td>
+            </tr>
+            <tr>
+                <td><strong>Change Layer</strong></td>
+                <td><span class="mouse"><span class="mouse-icon">🖱️</span>Right-Click</span> Layer ➔ <em>Change Object Layer</em></td>
+                <td>Moves selected geometry to the specified organizational layer.</td>
+                <td>To organize complex files, allowing you to hide/lock parts easily.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2>Parts 5-8: 2D to 3D, Modeling Aids &amp; CPlanes</h2>
+    <table>
+        <thead><tr><th width="15%">Command / Aid</th><th width="20%">Inputs</th><th width="35%">What Happens (Output)</th><th width="30%">Why Use It?</th></tr></thead>
+        <tbody>
+            <tr>
+                <td><strong>Sweep 1 / 2</strong></td>
+                <td><span class="cmd">Sweep1</span> / <span class="cmd">Sweep2</span></td>
+                <td>Extrudes a shape along 1 or 2 guide rails.</td>
+                <td>To make complex piping, molding, or custom structural frames.</td>
+            </tr>
+            <tr>
+                <td><strong>Curve Boolean</strong></td>
+                <td><span class="cmd">CurveBoolean</span></td>
+                <td>Combines overlapping curves by clicking inside the desired regions.</td>
+                <td>Faster than manually trimming multiple overlapping 2D shapes.</td>
+            </tr>
+            <tr>
+                <td><strong>Ortho Mode</strong></td>
+                <td>Hold <kbd>Shift</kbd> <em>while drawing</em></td>
+                <td>Constrains mouse movement to strict 90° or 45° angles.</td>
+                <td>To ensure lines and movements are perfectly straight.</td>
+            </tr>
+            <tr>
+                <td><strong>Nudge</strong></td>
+                <td><kbd>Alt</kbd> + <kbd>Arrow Keys</kbd></td>
+                <td>Steps object by tiny, exact increments. (<kbd>Shift</kbd> = large step).</td>
+                <td>To micro-adjust placement without losing grid alignment.</td>
+            </tr>
+            <tr>
+                <td><strong>Project</strong></td>
+                <td><span class="cmd">Project</span> / <span class="cmd">ProjectToCPlane</span></td>
+                <td>Throws a curve onto a 3D surface, or flattens it to the floor.</td>
+                <td>To map 2D logos onto curved objects, or fix non-flat curves.</td>
+            </tr>
+            <tr>
+                <td><strong>Select Dupes</strong></td>
+                <td><span class="cmd">SelDup</span> + <kbd>Enter</kbd></td>
+                <td>Selects identically overlapping geometry.</td>
+                <td>To clean up messy files and prevent 3D printing errors.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2>Parts 9-10: Advanced Transforms &amp; Solid Edits</h2>
+    <table>
+        <thead><tr><th width="15%">Command</th><th width="20%">Inputs</th><th width="35%">What Happens (Output)</th><th width="30%">Why Use It?</th></tr></thead>
+        <tbody>
+            <tr>
+                <td><strong>Rotate 3D</strong></td>
+                <td><span class="cmd">Rotate3D</span> + <kbd>Enter</kbd></td>
+                <td>Rotates geometry around a custom drawn axis line.</td>
+                <td>To rotate parts (like hinges) that are not aligned to the grid.</td>
+            </tr>
+            <tr>
+                <td><strong>Scale 1D / 2D</strong></td>
+                <td><span class="cmd">Scale1D</span> / <span class="cmd">Scale2D</span></td>
+                <td>Stretches an object in only 1 or 2 directions based on points.</td>
+                <td>To stretch a pillar exactly to a ceiling without making it wider.</td>
+            </tr>
+            <tr>
+                <td><strong>Split / Trim</strong></td>
+                <td><span class="cmd">Split</span> / <span class="cmd">Trim</span></td>
+                <td>Split cuts into pieces; Trim cuts and deletes the excess.</td>
+                <td>To carve up surfaces using intersecting lines or other planes.</td>
+            </tr>
+            <tr>
+                <td><strong>Boolean Union</strong></td>
+                <td><span class="cmd">BooleanUnion</span></td>
+                <td>Fuses intersecting solids into one continuous, watertight mesh.</td>
+                <td>To merge parts for final manufacturing.</td>
+            </tr>
+            <tr>
+                <td><strong>Boolean Diff</strong></td>
+                <td><span class="cmd">BooleanDifference</span></td>
+                <td>Uses Solid A to cut a hole out of Solid B.</td>
+                <td>To create sockets, screw holes, or intricate hollows.</td>
+            </tr>
+            <tr>
+                <td><strong>Fillet Edge</strong></td>
+                <td><span class="cmd">FilletEdge</span></td>
+                <td>Rounds off the sharp 90-degree corners of a solid volume.</td>
+                <td>To make realistic, handleable objects (removes sharp edges).</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2>Part 11: Arrays, Flow &amp; Cage Deformations</h2>
+    <table>
+        <thead><tr><th width="15%">Command</th><th width="20%">Inputs</th><th width="35%">What Happens (Output)</th><th width="30%">Why Use It?</th></tr></thead>
+        <tbody>
+            <tr>
+                <td><strong>Array</strong></td>
+                <td><span class="cmd">ArrayLinear</span> / <span class="cmd">ArrayPolar</span></td>
+                <td>Creates precise copies in lines, 3D grids, or circular patterns.</td>
+                <td>To generate stairs, gears, or patterned architecture instantly.</td>
+            </tr>
+            <tr>
+                <td><strong>Flow Along Srf</strong></td>
+                <td><span class="cmd">FlowAlongSrf</span></td>
+                <td>Morphs a flat 3D object to wrap around a curved target surface.</td>
+                <td>To apply complex textures, scales, or text to organic shapes.</td>
+            </tr>
+            <tr>
+                <td><strong>History</strong></td>
+                <td><span class="cmd">History</span> <em>(Record = Yes)</em></td>
+                <td>Links generated geometry to its original parent curve.</td>
+                <td>Updating the base curve automatically updates the 3D model.</td>
+            </tr>
+            <tr>
+                <td><strong>Deformations</strong></td>
+                <td><span class="cmd">Twist</span> / <span class="cmd">Bend</span> / <span class="cmd">Taper</span></td>
+                <td>Applies global, sweeping bending or twisting forces to a solid.</td>
+                <td>To turn straight geometry into dynamic, sweeping forms.</td>
+            </tr>
+            <tr>
+                <td><strong>Cage Edit</strong></td>
+                <td><span class="cmd">CageEdit</span></td>
+                <td>Wraps objects in a control box with editable points.</td>
+                <td>To organically push/pull complex groups of objects seamlessly.</td>
+            </tr>
+        </tbody>
+    </table>
+
+
+</body></html>
