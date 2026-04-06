@@ -23,7 +23,7 @@
             --chat-bot: #e5e7eb;
             
             /* Adjustable Settings */
-            --video-width: 70%; /* Default slightly larger, if changing, update the slider also line 508*/
+            --video-width: 70%; /* Keep this default in sync with #videoSizeSlider value below. */
         }
 
         /* Dark Theme Variables */
@@ -264,6 +264,7 @@
         }
         body.dark-theme .format-hint { color: #9ca3af; }
 
+        /* Print stylesheet: hide interactive UI and simplify visuals for clean paper/PDF output. */
         @media print {
             body { padding: 0; font-size: 10pt; max-width: 100%; background: white !important; color: black !important; }
             .video-panel, #menuBtn, .modal-overlay { display: none !important; }
@@ -318,6 +319,7 @@
                         <ul class="tree">
                             <li><span class="cmd-title">Camera Controls</span>
                                 <ul>
+                                    <!-- Authoring note: keep each timestamp label text identical to data-time (mm:ss or h:mm:ss). -->
                                     <li><span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-rmb"/><use href="#mouse-base"/></svg> Drag</span> <span class="desc">Orbit View</span> <a class="ts" data-time="02:34">02:34</a></li>
                                     <li><kbd>Shift</kbd> + <span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-rmb"/><use href="#mouse-base"/></svg> Drag</span> <span class="desc">Pan View</span> <a class="ts" data-time="02:42">02:42</a></li>
                                     <li><kbd>Ctrl</kbd> + <span class="mouse-action"><svg class="mouse" viewBox="0 0 24 36"><use href="#mouse-rmb"/><use href="#mouse-base"/></svg> Drag</span> <span class="desc">Smooth Zoom</span> <a class="ts" data-time="02:48">02:48</a></li>
@@ -566,12 +568,17 @@
 
                     <div class="setting-row">
                         <label>Desktop Video Width</label>
+                        <!-- Keep this value in sync with the --video-width default in :root above. -->
                         <input type="range" id="videoSizeSlider" min="40" max="80" value="70"> 
                     </div>
                     <p class="desc">Slide to adjust how much screen space the video takes up on desktop monitors.</p>
                 </div>
 
-                <div id="tab-chat" class="tab-content" style="display: flex; flex-direction: column;">
+                 <!-- Chat stays in Feedback only by default.
+                     To force it visible at startup later, change this to:
+                     <div id="tab-chat" class="tab-content" style="display: flex; flex-direction: column;">
+                 -->
+                 <div id="tab-chat" class="tab-content">
                     <h3>Send Feedback</h3>
                     <div class="chat-container">
                         <div class="chat-messages" id="chatBox">
@@ -614,6 +621,8 @@
         }
 
         function parseTimeStr(timeStr) {
+            // Supported timestamp formats: mm:ss and h:mm:ss.
+            // Invalid or unexpected formats safely fall back to 0.
             let parts = timeStr.split(':').map(Number);
             if (parts.length === 2) return parts[0] * 60 + parts[1];
             if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
@@ -658,6 +667,7 @@
                 
                 const targetId = this.getAttribute('data-tab');
                 const targetContent = document.getElementById(targetId);
+                // Most tabs render as block; Feedback tab uses flex for chat layout.
                 targetContent.style.display = targetId === 'tab-chat' ? 'flex' : 'block';
             }
         });
@@ -673,6 +683,7 @@
         });
 
         // Video Size Slider
+        // Live preview only: this updates --video-width during the session and is not persisted after reload.
         document.getElementById('videoSizeSlider').addEventListener('input', function() {
             document.documentElement.style.setProperty('--video-width', this.value + '%');
         });
@@ -693,6 +704,8 @@
 
         function formatMessage(text) {
             // Escape first so user-provided HTML never executes.
+            // Supported lightweight formatting: **bold**, *italic*, `code`, and newlines.
+            // Links/lists/headings are intentionally not parsed.
             let safe = escapeHtml(text);
 
             // Basic markdown-like formatting.
