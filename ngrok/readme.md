@@ -17,6 +17,62 @@ Important:
 - All task create/update commands must be run in elevated PowerShell (Run as Administrator).
 - ngrok auth token is user-scoped unless explicitly configured otherwise.
 
+## Recent Session Notes (What We Changed And Why It Failed)
+
+### What was done
+
+1. Verified both tasks existed and could be started manually:
+  - `LocalStaticServer-8000`
+  - `Ngrok-8000`
+2. Verified local server log had valid `200`/`304` request lines (server was serving files).
+3. Verified ngrok failures were auth/context related earlier (`ERR_NGROK_4018`) when task context was wrong.
+4. Checked task configuration and found:
+  - trigger type: `Boot`
+  - principal logon type: `Interactive`
+
+### Why sticky auto-start after reboot was unreliable
+
+- `Boot` + `Interactive` can miss startup depending on login/session timing.
+- For user-scoped apps like this, `AtLogOn` is typically more reliable than `AtStartup`.
+
+### Why the last update command failed
+
+- The command that attempted to re-register tasks failed with `Access is denied`.
+- Root cause: it was run in a non-elevated PowerShell, so `Register-ScheduledTask` could not modify task definitions.
+
+### Concrete fix to apply (elevated PowerShell)
+
+Run this in PowerShell as Administrator to make startup reliable at user login:
+
+```powershell
+$ErrorActionPreference = "Stop"
+$tasks = "LocalStaticServer-8000","Ngrok-8000"
+
+foreach($name in $tasks){
+  $t = Get-ScheduledTask -TaskName $name
+  $a = $t.Actions[0]
+  $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Highest
+  $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+
+  Register-ScheduledTask -TaskName $name `
+   -Action (New-ScheduledTaskAction -Execute $a.Execute -Argument $a.Arguments) `
+   -Trigger $trigger `
+   -Principal $principal `
+   -Force | Out-Null
+}
+```
+
+### Verify the fix
+
+```powershell
+Get-ScheduledTask -TaskName "LocalStaticServer-8000" | Select-Object TaskName,Triggers,Principal | Format-List
+Get-ScheduledTask -TaskName "Ngrok-8000" | Select-Object TaskName,Triggers,Principal | Format-List
+```
+
+Expected:
+- trigger should show `MSFT_TaskLogonTrigger`
+- principal remains your user with `Interactive`
+
 ## Daily Operations (No Manual Foreground Commands)
 
 ### Start both sticky services
