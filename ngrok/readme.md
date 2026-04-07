@@ -179,9 +179,14 @@ powershell -ExecutionPolicy Bypass -File "C:\Users\gkayt\OneDrive\Documents\vsco
 
 The report includes:
 - Top accessed files (bar chart)
+- HTTP methods (bar chart)
 - Status code breakdown (bar chart)
+- Status families (bar chart)
 - Top client IPs (bar chart)
 - Requests per hour (bar chart)
+- Recent requests, newest first
+
+Logs in the dashboard now show the newest entries first.
 
 Live auto-refresh every 15 seconds (regenerate + browser open once):
 
@@ -200,6 +205,40 @@ This local dashboard gives you one page for everything:
 - Access statistics charts (top files, status codes, IPs, hourly activity)
 - Statistics are on the same site, not a separate page
 - The page updates automatically when logs or task state change
+
+IP sorting options are available in both dashboard and report UI:
+- Sort by `Requests`, `Unique Sites`, or `IP Address`
+- Order `Asc` or `Desc`
+
+API version of IP sorting:
+
+```powershell
+curl.exe "http://127.0.0.1:8091/api/stats?top=50&ip_sort=ip&ip_order=asc"
+curl.exe "http://127.0.0.1:8091/api/stats?top=50&ip_sort=requests&ip_order=desc"
+curl.exe "http://127.0.0.1:8091/api/stats?top=50&ip_sort=sites&ip_order=desc"
+```
+
+Drill-down by specific IP/site/status:
+
+```powershell
+# specific IP
+curl.exe "http://127.0.0.1:8091/api/stats?top=50&ip=::1"
+
+# specific site path
+curl.exe "http://127.0.0.1:8091/api/stats?top=50&site=%2FRhino8_cheat_sheet_timestamps_interactive.html"
+
+# specific status code
+curl.exe "http://127.0.0.1:8091/api/stats?top=50&status=404"
+
+# combine all filters
+curl.exe "http://127.0.0.1:8091/api/stats?top=50&ip=::1&site=%2FRhino8_cheat_sheet_timestamps_interactive.html&status=304"
+```
+
+Get all available filter values (IPs, sites, status codes) and status explanations:
+
+```powershell
+curl.exe "http://127.0.0.1:8091/api/dimensions"
+```
 
 Start dashboard server:
 
@@ -244,6 +283,20 @@ Remove startup task:
 ```powershell
 powershell -ExecutionPolicy Bypass -File "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\uninstall-dashboard-startup.ps1"
 ```
+
+### Robustness tests (break-style parser tests)
+
+Run the test suite:
+
+```powershell
+c:/Users/gkayt/OneDrive/Documents/vscode/html/.venv/Scripts/python.exe -m unittest discover -s "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\tests" -p "test_*.py" -v
+```
+
+The tests include:
+- malformed log lines
+- UTF-16 log decoding
+- invalid sort key fallback
+- IP sorting by category (`ip`, `requests`, `sites`)
 
 ## Common Errors and What They Mean
 

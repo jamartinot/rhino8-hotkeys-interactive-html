@@ -23,6 +23,24 @@ ACCESS_RE = re.compile(
     r"^(?P<ip>\S+)\s+-\s+-\s+\[(?P<dt>[^\]]+)\]\s+\"(?P<method>[A-Z]+)\s+(?P<path>\S+)\s+HTTP/\d(?:\.\d)?\"\s+(?P<status>\d{3})\s+"
 )
 
+STATUS_EXPLANATIONS = {
+    "200": "OK - request succeeded.",
+    "201": "Created - resource was created successfully.",
+    "204": "No Content - success with no response body.",
+    "301": "Moved Permanently - resource URL changed permanently.",
+    "302": "Found - temporary redirect.",
+    "304": "Not Modified - browser cache is still valid.",
+    "400": "Bad Request - malformed request syntax.",
+    "401": "Unauthorized - authentication is required.",
+    "403": "Forbidden - request understood but blocked.",
+    "404": "Not Found - requested path does not exist.",
+    "429": "Too Many Requests - rate limited.",
+    "500": "Internal Server Error - server-side failure.",
+    "502": "Bad Gateway - invalid upstream response.",
+    "503": "Service Unavailable - service temporarily unavailable.",
+    "504": "Gateway Timeout - upstream timed out.",
+}
+
 
 def run_powershell(command: str, timeout: int = 20) -> subprocess.CompletedProcess:
     return subprocess.run(
@@ -101,14 +119,37 @@ def read_tail(path: Path, lines: int = 80):
 
     encoding = detect_text_encoding(path)
     with path.open("r", encoding=encoding, errors="replace") as f:
-        return list(deque(f, maxlen=lines))
+        return list(reversed(list(deque(f, maxlen=lines))))
 
 
-def parse_access_stats(path: Path, top: int = 20):
+def sort_ip_records(records, sort_by="requests", order="desc"):
+    key_map = {
+        "ip": lambda item: item["label"].lower(),
+        "requests": lambda item: item["requests"],
+        "sites": lambda item: item["sites"],
+    }
+    sort_key = key_map.get(sort_by, key_map["requests"])
+    reverse = order != "asc"
+    return sorted(records, key=sort_key, reverse=reverse)
+
+
+def parse_access_stats(
+    path: Path,
+    top: int = 20,
+    ip_sort: str = "requests",
+    ip_order: str = "desc",
+    ip_filter: str | None = None,
+    site_filter: str | None = None,
+    status_filter: str | None = None,
+):
     files = Counter()
     statuses = Counter()
+    methods = Counter()
+    families = Counter()
     ips = Counter()
+    ip_sites = {}
     hourly = Counter()
+    recent = deque(maxlen=25)
     total = 0
 
     if not path.exists():
@@ -128,11 +169,35 @@ def parse_access_stats(path: Path, top: int = 20):
             if not m:
                 continue
 
-            total += 1
             req_path = m.group("path").split("?", 1)[0] or "/"
+            ip = m.group("ip")
+            status = m.group("status")
+
+            if ip_filter and ip != ip_filter:
+                continue
+            if site_filter and req_path != site_filter:
+                continue
+            if status_filter and status != status_filter:
+                continue
+
+            total += 1
+            method = m.group("method")
             files[req_path] += 1
-            statuses[m.group("status")] += 1
-            ips[m.group("ip")] += 1
+            statuses[status] += 1
+            methods[method] += 1
+            families[f"{status[0]}xx"] += 1
+            ips[ip] += 1
+            if ip not in ip_sites:
+                ip_sites[ip] = set()
+            ip_sites[ip].add(req_path)
+
+            recent.appendleft({
+                "ip": m.group("ip"),
+                "dt": m.group("dt"),
+                "method": method,
+                "path": req_path,
+                "status": status,
+            })
 
             dt_text = m.group("dt")
             hour_match = re.match(r"^(\d{2})/([A-Za-z]{3})/(\d{4})\s+(\d{2})", dt_text)
@@ -140,13 +205,70 @@ def parse_access_stats(path: Path, top: int = 20):
                 day, mon, year, hour = hour_match.groups()
                 hourly[f"{year}-{mon}-{day} {hour}:00"] += 1
 
+    ip_records = [
+        {
+            "label": ip,
+            "requests": count,
+            "sites": len(ip_sites.get(ip, set())),
+        }
+        for ip, count in ips.items()
+    ]
+    sorted_ip_records = sort_ip_records(ip_records, sort_by=ip_sort, order=ip_order)[:10]
+
     return {
         "total_requests": total,
         "unique_files": len(files),
         "top_files": [{"label": k, "value": v} for k, v in files.most_common(top)],
+        "methods": [{"label": k, "value": v} for k, v in methods.most_common()],
         "status_codes": [{"label": k, "value": v} for k, v in sorted(statuses.items())],
-        "top_ips": [{"label": k, "value": v} for k, v in ips.most_common(10)],
+        "status_families": [{"label": k, "value": v} for k, v in sorted(families.items())],
+        "top_ips": [{"label": item["label"], "value": item["requests"]} for item in sorted_ip_records],
+        "sites_per_ip": [{"label": item["label"], "value": item["sites"]} for item in sorted_ip_records],
+        "ip_stats": sorted_ip_records,
+        "ip_sort": ip_sort,
+        "ip_order": ip_order,
+        "filters": {
+            "ip": ip_filter,
+            "site": site_filter,
+            "status": status_filter,
+        },
+        "status_explanations": {code: STATUS_EXPLANATIONS.get(code, "Standard HTTP status code.") for code in statuses.keys()},
         "hourly": [{"label": k, "value": v} for k, v in sorted(hourly.items())],
+        "recent_requests": list(recent),
+    }
+
+
+def parse_dimensions(path: Path):
+    ips = set()
+    sites = set()
+    statuses = set()
+
+    if not path.exists():
+        return {
+            "ips": [],
+            "sites": [],
+            "statuses": [],
+            "status_explanations": {},
+            "status_explanations_all": STATUS_EXPLANATIONS,
+        }
+
+    encoding = detect_text_encoding(path)
+    with path.open("r", encoding=encoding, errors="replace") as f:
+        for line in f:
+            m = ACCESS_RE.match(line)
+            if not m:
+                continue
+            ips.add(m.group("ip"))
+            sites.add(m.group("path").split("?", 1)[0] or "/")
+            statuses.add(m.group("status"))
+
+    ordered_statuses = sorted(statuses)
+    return {
+        "ips": sorted(ips),
+        "sites": sorted(sites),
+        "statuses": ordered_statuses,
+        "status_explanations": {code: STATUS_EXPLANATIONS.get(code, "Standard HTTP status code.") for code in ordered_statuses},
+        "status_explanations_all": STATUS_EXPLANATIONS,
     }
 
 
@@ -220,6 +342,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
         data = json.dumps(payload).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+        self.send_header("Pragma", "no-cache")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
@@ -228,6 +352,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
         data = payload.encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+        self.send_header("Pragma", "no-cache")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
@@ -253,6 +379,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         data = file_path.read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", ctype)
+        if file_path.name in ("access-report.html", "index.html", "dashboard.js", "dashboard.css"):
+            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+            self.send_header("Pragma", "no-cache")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
@@ -298,7 +427,30 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         if route == "/api/stats":
             top = int(query.get("top", [20])[0])
-            self._json(200, {"ok": True, "stats": parse_access_stats(LOCAL_LOG, top=top)})
+            ip_sort = query.get("ip_sort", ["requests"])[0].lower()
+            ip_order = query.get("ip_order", ["desc"])[0].lower()
+            ip_filter = query.get("ip", [None])[0]
+            site_filter = query.get("site", [None])[0]
+            status_filter = query.get("status", [None])[0]
+            self._json(
+                200,
+                {
+                    "ok": True,
+                    "stats": parse_access_stats(
+                        LOCAL_LOG,
+                        top=top,
+                        ip_sort=ip_sort,
+                        ip_order=ip_order,
+                        ip_filter=ip_filter,
+                        site_filter=site_filter,
+                        status_filter=status_filter,
+                    ),
+                },
+            )
+            return
+
+        if route == "/api/dimensions":
+            self._json(200, {"ok": True, "dimensions": parse_dimensions(LOCAL_LOG)})
             return
 
         if "events" in route or route in ("/events", "/api/stream"):

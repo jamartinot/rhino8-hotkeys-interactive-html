@@ -122,6 +122,23 @@ body {
   padding: 12px;
 }
 
+.sort-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+.sort-controls select {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 4px 8px;
+  font: inherit;
+}
+
 .status-card h3 {
   margin: 0;
 }
@@ -182,9 +199,38 @@ body {
 }
 
 .bar.files { background: var(--accent); }
+.bar.methods { background: #8e6c8a; }
 .bar.status { background: var(--accent-2); }
+.bar.families { background: #6d597a; }
 .bar.ips { background: #2a9d8f; }
 .bar.hourly { background: #7f5539; }
+
+.recent-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: "IBM Plex Mono", Consolas, monospace;
+  font-size: 12px;
+}
+
+.recent-table th,
+.recent-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.recent-table th {
+  position: sticky;
+  top: 0;
+  background: #fffdf8;
+  z-index: 1;
+}
+
+.recent-table td {
+  max-width: 280px;
+  word-break: break-word;
+}
 
 .val {
   text-align: right;
