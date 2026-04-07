@@ -1,0 +1,37 @@
+# Python virtual environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+
+# Node / JS dependencies and outputs
+node_modules/
+coverage/
+dist/
+build/
+
+# Local environment and secrets
+.env
+.env.*
+*.local
+
+# Logs and temp files
+*.log
+*.tmp
+*.temp
+*.bak
+*~
+
+# OS/editor junk
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode-test/
+
+# Generated archives
+*.zip
+*.tar
+*.tar.gz
