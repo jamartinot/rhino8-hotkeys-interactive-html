@@ -257,6 +257,12 @@
             color: var(--accent);
             word-break: break-word;
         }
+        body.egg-mode h1::after {
+            content: " 🐣";
+        }
+        body.rhino-horn-mode h1::after {
+            content: " 🦏";
+        }
         .video-error-content {
             display: block;
             padding: 20px;
@@ -990,6 +996,34 @@ bar showing file:///... and triggers YouTube's Error 153 security block).</li>
         const chatInput = document.getElementById('chatInput');
         const sendBtn = document.getElementById('sendBtn');
 
+        // --- EASTER EGGS BEGIN (comment out this block to disable) ---
+        var ENABLE_EASTER_EGGS = true;
+
+        function runEasterEggCommand(lowerText, originalText) {
+            if (!ENABLE_EASTER_EGGS) return false;
+
+            if (lowerText === 'egg' || lowerText === '/egg' || lowerText === '🐣') {
+                appendMessage(originalText, true);
+                chatInput.value = '';
+                document.body.classList.add('egg-mode');
+                appendMessage('🐣 Easter egg found. Use the popup guide or type `host popup` for the detailed CodePen walkthrough.', false);
+                showVideoErrorPopup();
+                return true;
+            }
+
+            if (lowerText === 'rhino' || lowerText === '/rhino' || lowerText === 'horn') {
+                appendMessage(originalText, true);
+                chatInput.value = '';
+                document.body.classList.add('rhino-horn-mode');
+                document.getElementById('menuBtn').onclick();
+                appendMessage('🦏 Rhino horn mode unlocked. Check Settings for Print / Save PDF, Download HTML, and video width.', false);
+                return true;
+            }
+
+            return false;
+        }
+        // --- EASTER EGGS END ---
+
         function escapeHtml(text) {
             return text
                 .replace(/&/g, '&amp;')
@@ -1036,6 +1070,10 @@ bar showing file:///... and triggers YouTube's Error 153 security block).</li>
             if (!text) return;
 
             const lowerText = text.toLowerCase();
+
+            if (runEasterEggCommand(lowerText, text)) {
+                return;
+            }
 
             if (lowerText === 'host popup' || lowerText === '/host popup') {
                 appendMessage(text, true);

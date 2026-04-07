@@ -9,6 +9,7 @@ I built an adversarial test harness for [ngrok_tunneling_this_has_port_to_INTERN
 - YouTube failure helper popup behavior
 - chat message formatting, HTML escaping, and hyperlink rendering
 - hidden chat host command behavior (`host` and `/host`)
+- comment-blocked easter eggs for `egg` and `rhino`
 - persisted theme and video-width settings
 - modal and tab switching behavior
 - menu Print / Save PDF and Download HTML actions
@@ -56,11 +57,15 @@ The harness lives at [tests/rhino8_interactive_security.test.js](tests/rhino8_in
    - Risk: users stayed stuck with a dead video panel occupying screen space.
    - Fix: after first error popup dismissal (while failure persists), app enters `video-unavailable-layout`: video is hidden and content uses a two-column layout on wide screens.
 
+11. The page lacked easy-to-disable playful hidden commands.
+   - Risk: feature clutter can become hard to remove or test cleanly.
+   - Fix: easter eggs are isolated in a clearly marked block that can be commented out, with a toggle gate and dedicated tests.
+
 ## Verification
 
 The final run passed all checks:
 
-- 56 passed
+- 61 passed
 - 0 failed
 
 Command used:
@@ -71,7 +76,7 @@ node tests/rhino8_interactive_security.test.js
 
 ### Tests Used
 
-- 56 automated tests passed in [tests/rhino8_interactive_security.test.js](tests/rhino8_interactive_security.test.js), including:
+- 61 automated tests passed in [tests/rhino8_interactive_security.test.js](tests/rhino8_interactive_security.test.js), including:
 - parser edge cases (`mm:ss`, `h:mm:ss`, whitespace, null, negative/decimal/invalid input)
 - YouTube ready/error callbacks, delayed-failure timer behavior, and automatic popup triggering
 - timestamp click behavior for ready, waiting, malformed-player, mobile scroll, and popup fallback paths
@@ -80,7 +85,7 @@ node tests/rhino8_interactive_security.test.js
 - print button behavior and download success/fallback behavior
 - popup open/close/backdrop behavior, aria state changes, and tab-switch isolation
 - popup dismissal fallback behavior: first-open no layout switch, dismissal-triggered switch, ready-state no-switch, and persistence across reopens
-- chat behavior for normal send, enter/shift-enter, escaping/formatting, auto-linking, labeled markdown links, and `host`/`/host` helper commands
+- chat behavior for normal send, enter/shift-enter, escaping/formatting, auto-linking, labeled markdown links, `host`/`/host` helper commands, and easter eggs (`egg`, `rhino`)
 
 ### What They Proved
 
@@ -92,6 +97,7 @@ node tests/rhino8_interactive_security.test.js
 - Print/download controls execute their expected flows and fail safely when unsupported.
 - Chat messages stay inert when they contain HTML or oversized payloads.
 - Chat can show clean clickable link labels instead of raw URLs.
+- Easter eggs are isolated and can be disabled cleanly.
 - Persisted settings are clamped into supported values before being applied.
 - Modal and tab interactions still work after the hardening changes.
 

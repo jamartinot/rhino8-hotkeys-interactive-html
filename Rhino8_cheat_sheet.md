@@ -5,7 +5,7 @@ Converted from [Rhino 8 Interactive Cheat Sheet Manual.pdf](Rhino%208%20Interact
 ## Overview
 
 
-This document describes a single-file Rhino 8 cheat sheet web app. It combines an embedded YouTube video with a clickable command list, responsive layout, theme controls, and print-friendly styles.
+This document describes a single-file Rhino 8 cheat sheet web app. It combines an embedded YouTube video with a clickable command list, responsive layout, theme controls, print-friendly styles, a help popup for video failures, and a few hidden easter eggs.
 
 ## Main Features
 
@@ -22,6 +22,14 @@ The layout adapts to screen size with CSS Flexbox and Grid. On mobile, the video
 ### Dynamic Theming and Sizing
 
 A settings menu can toggle dark mode by adding a CSS class to the body. A slider adjusts a CSS variable to widen or narrow the video panel.
+
+### Failure Recovery and Help
+
+If YouTube cannot load, the page shows a helper popup with hosted-site and manual-PDF links. After dismissing the popup in an unresolved failure state, the layout can hide the video panel and switch to a more practical reading layout.
+
+### Chat Helpers and Easter Eggs
+
+The chat input supports clean hyperlinks, `host` / `host popup` helper commands, and a couple of comment-blocked easter eggs that can be removed easily if desired.
 
 ### Print Optimization
 
@@ -81,6 +89,7 @@ The app is organized into three standard web sections: `style` for design, `body
 - The main content lives inside a `.layout-container` split into a `.video-panel` and a `.content-panel`.
 - Timestamp links use a `data-time` attribute such as `02:34`; the visible text is for the user, while the data attribute is for the script.
 - The modal window contains the Info, Settings, and Chat tabs and starts hidden.
+- The failure popup includes quick links back to the hosted page, the manual PDF, and a CodePen guide.
 
 ### JavaScript Logic
 
@@ -91,6 +100,10 @@ The app is organized into three standard web sections: `style` for design, `body
 - Dark mode toggles by adding or removing the `.dark-theme` class on the `body` element.
 - The video width slider updates the `--video-width` CSS variable.
 - The chat feature appends the user message, then inserts a canned bot reply after a short delay.
+- The chat parser supports safe raw links and labeled links like `[Manual PDF](https://...)`.
+- `host` opens helper links in chat, while `host popup` opens the failure helper popup.
+- The page can fall back to a video-free layout after a failure popup is dismissed.
+- Hidden easter eggs live in one clearly marked block so they can be commented out without touching the rest of the script.
 
 ## Customization Guide
 
@@ -160,6 +173,10 @@ The `.grid-2col` settings control whether content can be displayed in a one-colu
 ### Change the Chat Bot Reply
 
 Edit the `botResponse` string in `handleSend()` to change the automated reply text.
+
+### Remove the Easter Eggs
+
+Comment out the clearly marked `EASTER EGGS` block in the script to disable the hidden `egg` and `rhino` commands without affecting the rest of the page.
 
 ## Contact
 

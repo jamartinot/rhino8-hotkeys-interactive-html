@@ -765,6 +765,33 @@ const tests = [
     suite.context.handleSend();
     assert.equal(suite.videoErrorModal.style.display, 'flex');
   }],
+  ['egg command opens helper popup and marks egg mode', () => {
+    const suite = createDefaultSuite();
+    suite.chatInput.value = 'egg';
+    suite.context.handleSend();
+    assert.equal(suite.videoErrorModal.style.display, 'flex');
+    assert.equal(suite.bodyClassList.contains('egg-mode'), true);
+    assert.match(suite.chatBox.children.at(-1).innerHTML, /Easter egg found/);
+  }],
+  ['rhino command opens menu and marks horn mode', () => {
+    const suite = createDefaultSuite();
+    suite.chatInput.value = 'rhino';
+    suite.context.handleSend();
+    assert.equal(suite.menuModal.style.display, 'flex');
+    assert.equal(suite.bodyClassList.contains('rhino-horn-mode'), true);
+    assert.match(suite.chatBox.children.at(-1).innerHTML, /Rhino horn mode unlocked/);
+  }],
+  ['easter eggs can be disabled cleanly', () => {
+    const suite = createDefaultSuite();
+    suite.context.ENABLE_EASTER_EGGS = false;
+    suite.chatInput.value = 'egg';
+    suite.context.handleSend();
+    assert.equal(suite.videoErrorModal.style.display, '');
+    assert.equal(suite.menuModal.style.display, '');
+    assert.equal(suite.bodyClassList.contains('egg-mode'), false);
+    assert.equal(suite.chatBox.children.length, 1);
+    assert.ok(suite.timers.some((item) => item.delay === 1000));
+  }],
   ['/host popup command is also supported', () => {
     const suite = createDefaultSuite();
     suite.chatInput.value = '/host popup';
