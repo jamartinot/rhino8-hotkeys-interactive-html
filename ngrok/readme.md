@@ -206,6 +206,24 @@ This local dashboard gives you one page for everything:
 - Statistics are on the same site, not a separate page
 - The page updates automatically when logs or task state change
 
+Start the live dashboard server:
+
+```powershell
+py -3 "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\dashboard_server.py" --port 8091
+```
+
+Open the dashboard in a browser:
+
+```powershell
+Start-Process "http://127.0.0.1:8091"
+```
+
+If you only want the generated HTML report instead of the live dashboard:
+
+```powershell
+Start-Process "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\access-report.html"
+```
+
 IP sorting options are available in both dashboard and report UI:
 - Sort by `Requests`, `Unique Sites`, or `IP Address`
 - Order `Asc` or `Desc`
@@ -317,6 +335,39 @@ Concrete steps:
 2. Restart only the ngrok task.
 3. Check `Get-Content C:\ProgramData\ngrok\ngrok-8000.txt -Tail 50`.
 4. Confirm the error is gone and a tunnel session appears.
+
+### Free plan tunnel conflicts
+
+Meaning:
+- ngrok Free does not allow custom subdomains.
+- If you try to force separate named subdomains, ngrok returns `ERR_NGROK_313`.
+
+Fix:
+- Leave the tunnel URLs random on the free plan.
+- Keep the control panel private with OAuth and basic auth.
+- Stop any stale ngrok sessions before starting a new one if you hit `ERR_NGROK_334`.
+
+Concrete steps:
+1. Use the default random URL ngrok assigns.
+2. Keep `oauth.allow_emails` and `basic_auth` on the private tunnel.
+3. If a previous endpoint is still online, stop that session in the ngrok dashboard and restart.
+
+### `-ExecutionPolicy` is not recognized
+
+Meaning:
+- `-ExecutionPolicy` was run by itself. It is a parameter for `powershell.exe`, not a standalone command.
+
+Fix:
+- Prefix it with `powershell` (or run the script directly with `&`).
+
+Concrete steps:
+1. Run from any shell:
+  `powershell -ExecutionPolicy Bypass -File "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\install-dashboard-startup.ps1" -Port 8090 -StartNow`
+2. Or, if you are already in PowerShell:
+  `& "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\install-dashboard-startup.ps1" -Port 8090 -StartNow`
+3. If you see policy errors for script loading, use:
+  `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`
+  then re-run step 1 or 2.
 
 ### `Start-ScheduledTask ... cannot find the file specified`
 
