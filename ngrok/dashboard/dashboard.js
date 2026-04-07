@@ -1,5 +1,6 @@
-const REFRESH_SECONDS = 15;
-let tick = REFRESH_SECONDS;
+const FALLBACK_REFRESH_SECONDS = 60;
+let tick = FALLBACK_REFRESH_SECONDS;
+let eventSource = null;
 
 function byId(id) {
   return document.getElementById(id);
@@ -104,10 +105,27 @@ async function refreshAll() {
     renderBars("chart-hourly", stats.hourly || [], "hourly");
 
     byId("last-refresh").textContent = `Last refresh: ${new Date().toLocaleTimeString()}`;
-    tick = REFRESH_SECONDS;
+    tick = FALLBACK_REFRESH_SECONDS;
   } catch (err) {
     setActionResult(`Refresh error: ${err.message}`, true);
   }
+}
+
+function connectLiveEvents() {
+  if (eventSource) {
+    eventSource.close();
+  }
+
+  eventSource = new EventSource("/api/events");
+  eventSource.onopen = () => {
+    byId("next-refresh").textContent = "Live updates connected";
+  };
+  eventSource.addEventListener("update", async () => {
+    await refreshAll();
+  });
+  eventSource.onerror = () => {
+    byId("next-refresh").textContent = `Live updates reconnecting; fallback refresh in ${tick}s`;
+  };
 }
 
 async function taskAction(action) {
@@ -134,15 +152,20 @@ function bindActions() {
 function startCountdown() {
   setInterval(() => {
     tick = Math.max(0, tick - 1);
-    byId("next-refresh").textContent = `Next refresh in ${tick}s`;
+    if (eventSource && eventSource.readyState === 1) {
+      byId("next-refresh").textContent = "Live updates connected";
+    } else {
+      byId("next-refresh").textContent = `Fallback refresh in ${tick}s`;
+    }
   }, 1000);
 }
 
 async function boot() {
   bindActions();
+  connectLiveEvents();
   await refreshAll();
   startCountdown();
-  setInterval(refreshAll, REFRESH_SECONDS * 1000);
+  setInterval(refreshAll, FALLBACK_REFRESH_SECONDS * 1000);
 }
 
 boot();

@@ -1,5 +1,5 @@
 param(
-  [string]$TaskName = "Ngrok-ControlCenter"
+  [string]$TaskName = "Ngrok-ControlCenter-8091"
 )
 
 $ErrorActionPreference = "Stop"

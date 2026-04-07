@@ -1,6 +1,6 @@
 param(
-  [string]$TaskName = "Ngrok-ControlCenter",
-  [int]$Port = 8090,
+  [string]$TaskName = "Ngrok-ControlCenter-8091",
+  [int]$Port = 8091,
   [switch]$StartNow
 )
 
