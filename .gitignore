@@ -36,3 +36,9 @@ desktop.ini
 *.tar
 *.tar.gz
 *.yml
+
+# Ignore the cai directory
+cai/
+
+#ignore commit-history.txt
+commit-history.txt
