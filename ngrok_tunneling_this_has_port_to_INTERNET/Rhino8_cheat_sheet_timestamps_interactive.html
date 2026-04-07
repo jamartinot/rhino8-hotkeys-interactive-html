@@ -234,6 +234,19 @@
         }
         .modal-header h2 { margin: 0; font-size: 18px; }
         .close-btn { background: none; border: none; font-size: 24px; color: var(--text-color); cursor: pointer; }
+        .close-btn.hotkeys-btn {
+            background: #b91c1c;
+            color: #ffffff;
+            border: 1px solid #ef4444;
+            border-radius: 999px;
+            font-size: 14px;
+            font-weight: 700;
+            padding: 8px 14px;
+            line-height: 1.2;
+            max-width: 240px;
+            text-align: center;
+        }
+        .close-btn.hotkeys-btn:hover { background: #991b1b; }
 
         .video-help-list {
             margin: 10px 0 0;
@@ -691,7 +704,7 @@
         <div class="modal" role="dialog" aria-labelledby="videoErrorTitle" aria-modal="true">
             <div class="modal-header">
                 <h2 id="videoErrorTitle">Video Not Loading</h2>
-                <button class="close-btn" id="closeVideoErrorModal">&times;</button>
+                <button class="close-btn hotkeys-btn" id="closeVideoErrorModal">Okay, I just want to see hotkeys</button>
             </div>
             <div class="video-error-content">
                 <p>The embedded YouTube player could not connect in this environment.</p>

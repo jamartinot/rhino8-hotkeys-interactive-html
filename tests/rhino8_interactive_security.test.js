@@ -210,6 +210,9 @@ function createContext(options = {}) {
     player: createMockElement('player'),
   };
 
+  closeVideoErrorModal.textContent = 'Okay, I just want to see hotkeys';
+  closeVideoErrorModal.classList.add('hotkeys-btn');
+
   const document = {
     body,
     documentElement,
@@ -774,6 +777,11 @@ const tests = [
     assert.equal(suite.videoErrorModal.style.display, 'flex');
     assert.equal(suite.videoErrorModal.getAttribute('aria-hidden'), 'false');
   }],
+  ['video error popup uses red hotkeys button label', () => {
+    const suite = createDefaultSuite();
+    assert.equal(suite.closeVideoErrorModal.textContent, 'Okay, I just want to see hotkeys');
+    assert.equal(suite.closeVideoErrorModal.classList.contains('hotkeys-btn'), true);
+  }],
   ['first popup show does not hide video layout yet', () => {
     const suite = createDefaultSuite({ locationProtocol: 'file:' });
     suite.context.showVideoErrorPopup();
@@ -819,6 +827,13 @@ const tests = [
     suite.context.showVideoErrorPopup();
     suite.closeVideoErrorModal.click();
     assert.equal(suite.videoErrorModal.style.display, 'none');
+  }],
+  ['hotkeys button hides popup and can trigger fallback layout after dismissal', () => {
+    const suite = createDefaultSuite({ locationProtocol: 'file:' });
+    suite.context.showVideoErrorPopup();
+    suite.closeVideoErrorModal.click();
+    assert.equal(suite.videoErrorModal.style.display, 'none');
+    assert.equal(suite.bodyClassList.contains('video-unavailable-layout'), true);
   }],
   ['video error modal backdrop click hides popup', () => {
     const suite = createDefaultSuite();
