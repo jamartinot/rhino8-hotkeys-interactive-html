@@ -64,6 +64,17 @@
         h1 { text-align: center; font-size: 28px; margin-bottom: 5px; color: var(--primary); transition: color 0.3s; }
         body.dark-theme h1 { color: #f9fafb; }
         p.subtitle { text-align: center; color: #6b7280; font-size: 14px; margin-top: 0; }
+        p.credit-note {
+            text-align: center;
+            color: #6b7280;
+            font-size: 13px;
+            margin: 0 0 8px;
+        }
+        p.credit-note a {
+            color: var(--accent);
+            text-decoration: underline;
+            text-underline-offset: 2px;
+        }
 
         @media (max-width: 640px) {
             header {
@@ -198,6 +209,12 @@
             .grid-2col { display: grid; grid-template-columns: 1fr; gap: 15px; } /* Two-column layout for sections, change to 1fr 1fr if two-column layout is desired */
         }
 
+        /* After repeated video failures, hide video and maximize reading layout. */
+        body.video-unavailable-layout .video-panel { display: none; }
+        @media (min-width: 1200px) {
+            body.video-unavailable-layout .grid-2col { grid-template-columns: 1fr 1fr; }
+        }
+
         /* --- MODAL (POPUP) STYLES --- */
         .modal-overlay {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -217,6 +234,22 @@
         }
         .modal-header h2 { margin: 0; font-size: 18px; }
         .close-btn { background: none; border: none; font-size: 24px; color: var(--text-color); cursor: pointer; }
+
+        .video-help-list {
+            margin: 10px 0 0;
+            padding-left: 18px;
+        }
+        .video-help-list li { margin: 8px 0; }
+        .video-help-list a {
+            color: var(--accent);
+            word-break: break-word;
+        }
+        .video-error-content {
+            display: block;
+            padding: 20px;
+            flex: 1;
+            overflow-y: auto;
+        }
         
         .modal-body { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
         @media (min-width: 600px) { .modal-body { flex-direction: row; } }
@@ -243,6 +276,25 @@
         .setting-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
         .setting-row label { font-weight: bold; }
         input[type="range"] { width: 150px; cursor: pointer; }
+        .menu-actions {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 12px;
+        }
+        .menu-action-btn {
+            border: 1px solid var(--border);
+            background: var(--bg-light);
+            color: var(--text-color);
+            border-radius: 8px;
+            padding: 10px 12px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .menu-action-btn:hover { background: var(--border); }
+        @media (max-width: 640px) {
+            .menu-actions { grid-template-columns: 1fr; }
+        }
         
         /* Toggle Switch */
         .switch { position: relative; display: inline-block; width: 50px; height: 24px; }
@@ -284,6 +336,12 @@
             font-family: Consolas, monospace;
             font-size: 12px;
         }
+        .msg a {
+            color: inherit;
+            text-decoration: underline;
+            text-underline-offset: 2px;
+            font-weight: 600;
+        }
         .format-hint {
             margin-top: 6px;
             font-size: 12px;
@@ -294,6 +352,7 @@
         /* Print stylesheet: hide interactive UI and simplify visuals for clean paper/PDF output. */
         @media print {
             body { padding: 0; font-size: 10pt; max-width: 100%; background: white !important; color: black !important; }
+            header { display: none !important; }
             .video-panel, #menuBtn, .modal-overlay { display: none !important; }
             .timeline-section { border: 1px solid #000 !important; break-inside: avoid; margin-bottom: 15px; background: white !important; }
             .section-header { background-color: #e5e7eb !important; color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; border-bottom: 1px solid #000; }
@@ -326,6 +385,7 @@
     <header>
         <h1>Rhino 8: Interactive Video Cheat Sheet</h1>
         <p class="subtitle">Click any timestamp to instantly skip the video to that demonstration.</p>
+        <p class="credit-note">Credit: YouTube video referenced is <strong>Rhino 8: Full Beginner's Course</strong>. Download practice files from <a href="https://joemeister0.gumroad.com/l/azptap" target="_blank" rel="noopener noreferrer">joemeister0.gumroad.com/l/azptap</a>.</p>
         <button id="menuBtn">⚙️ Menu</button>
     </header>
 
@@ -599,6 +659,10 @@
                         <input type="range" id="videoSizeSlider" min="40" max="80" value="70"> 
                     </div>
                     <p class="desc">Slide to adjust how much screen space the video takes up on desktop monitors. This value is saved between visits.</p>
+                    <div class="menu-actions">
+                        <button type="button" class="menu-action-btn" id="printPageBtn">Print / Save PDF</button>
+                        <button type="button" class="menu-action-btn" id="downloadHtmlBtn">Download HTML</button>
+                    </div>
                 </div>
 
                  <!-- Chat stays in Feedback only by default.
@@ -623,6 +687,34 @@
         </div>
     </div>
 
+    <div id="videoErrorModal" class="modal-overlay" aria-hidden="true">
+        <div class="modal" role="dialog" aria-labelledby="videoErrorTitle" aria-modal="true">
+            <div class="modal-header">
+                <h2 id="videoErrorTitle">Video Not Loading</h2>
+                <button class="close-btn" id="closeVideoErrorModal">&times;</button>
+            </div>
+            <div class="video-error-content">
+                <p>The embedded YouTube player could not connect in this environment.</p>
+                <p>Possible reasons include:</p>
+                <ul>
+                    <li>This file uses the YouTube IFrame API to control a video via JavaScript, it cannot be
+run by simply double-clicking the .html file on your computer (this results in the browser address
+bar showing file:///... and triggers YouTube's Error 153 security block).</li>
+                </ul>
+                <details id="codepenGuideDetails" open>
+                    <summary><strong>Guide: Copy this HTML to CodePen</strong></summary>
+                    <ol>
+                        <li>Open <a href="https://codepen.io/pen/" target="_blank" rel="noopener noreferrer">CodePen editor</a>.</li>
+                        <li>Open this HTML file in VS Code or text editor and copy all content.</li>
+                        <li>Paste everything into the HTML panel in CodePen. Preview should appear.</li>
+                        <li>Save the Pen; the preview should load with a web-safe origin.</li>
+                    </ol>
+                </details>
+                <p class="desc">Tip: in Feedback chat, type <code>host</code> to open this helper popup anytime.</p>
+            </div>
+        </div>
+    </div>
+
     <script>
         // 1. Load the YouTube API asynchronously (more reliable)
         var tag = document.createElement('script');
@@ -633,6 +725,79 @@
         // 2. Initialize the player with a "Ready" flag
         var player;
         var isPlayerReady = false;
+        var ytConnectionLikelyFailed = false;
+        var YT_HELP_INTERACTIVE = 'https://extraterritorial-carlota-ironfisted.ngrok-free.dev/Rhino8_cheat_sheet_timestamps_interactive.html';
+        var YT_HELP_PDF = 'https://extraterritorial-carlota-ironfisted.ngrok-free.dev/Rhino%208%20Interactive%20Cheat%20Sheet%20Manual.pdf';
+        var isLocalFile = Boolean(window.location && window.location.protocol === 'file:');
+        var pageBootMs = Date.now();
+        var videoErrorShownAutomatically = false;
+        var videoErrorPopupShownCount = 0;
+        var videoErrorPopupDismissedCount = 0;
+
+        const videoErrorModal = document.getElementById('videoErrorModal');
+        const closeVideoErrorModal = document.getElementById('closeVideoErrorModal');
+        const codepenGuideDetails = document.getElementById('codepenGuideDetails');
+
+        function activateVideoUnavailableLayout() {
+            document.body.classList.add('video-unavailable-layout');
+        }
+
+        function shouldUseVideoUnavailableLayout() {
+            return !isPlayerReady && (
+                isLocalFile ||
+                ytConnectionLikelyFailed ||
+                videoErrorShownAutomatically
+            );
+        }
+
+        function showVideoErrorPopup() {
+            if (videoErrorModal) {
+                if (videoErrorModal.style.display !== 'flex') {
+                    videoErrorPopupShownCount += 1;
+                }
+                videoErrorModal.style.display = 'flex';
+                videoErrorModal.setAttribute('aria-hidden', 'false');
+                if (codepenGuideDetails) {
+                    codepenGuideDetails.open = true;
+                }
+                return;
+            }
+
+            alert('YouTube could not connect. Try these links:\n' + YT_HELP_INTERACTIVE + '\n' + YT_HELP_PDF);
+        }
+
+        function hideVideoErrorPopup() {
+            if (!videoErrorModal) return;
+            if (videoErrorModal.style.display === 'flex') {
+                videoErrorPopupDismissedCount += 1;
+            }
+            videoErrorModal.style.display = 'none';
+            videoErrorModal.setAttribute('aria-hidden', 'true');
+
+            if (videoErrorPopupShownCount >= 1 && videoErrorPopupDismissedCount >= 1 && shouldUseVideoUnavailableLayout()) {
+                activateVideoUnavailableLayout();
+            }
+        }
+
+        if (closeVideoErrorModal) {
+            closeVideoErrorModal.addEventListener('click', hideVideoErrorPopup);
+        }
+
+        if (videoErrorModal) {
+            videoErrorModal.addEventListener('click', function(e) {
+                if (e.target === videoErrorModal) {
+                    hideVideoErrorPopup();
+                }
+            });
+        }
+
+        setTimeout(function() {
+            if (!isPlayerReady) {
+                ytConnectionLikelyFailed = true;
+                videoErrorShownAutomatically = true;
+                showVideoErrorPopup();
+            }
+        }, 3500);
 
         function onYouTubeIframeAPIReady() {
             player = new YT.Player('player', {
@@ -642,6 +807,12 @@
                     'onReady': function(event) {
                         // This tells our code the video is successfully connected
                         isPlayerReady = true;
+                        ytConnectionLikelyFailed = false;
+                    },
+                    'onError': function() {
+                        ytConnectionLikelyFailed = true;
+                        videoErrorShownAutomatically = true;
+                        showVideoErrorPopup();
                     }
                 }
             });
@@ -665,6 +836,16 @@
 
                 // 3. Check if YouTube is fully loaded before trying to jump
                 if(!isPlayerReady || typeof player.seekTo !== 'function' || typeof player.playVideo !== 'function') {
+                    const connectionLikelyBlocked =
+                        isLocalFile ||
+                        ytConnectionLikelyFailed ||
+                        (!isPlayerReady && (Date.now() - pageBootMs > 1500));
+
+                    if (connectionLikelyBlocked) {
+                        showVideoErrorPopup();
+                        return;
+                    }
+
                     alert("The YouTube video is still connecting. Please wait one second and try again.");
                     return;
                 }
@@ -686,8 +867,8 @@
         window.onclick = (e) => { if (e.target == modal) modal.style.display = 'none'; }
 
         // Tab Switching
-        const tabBtns = document.querySelectorAll('.tab-btn');
-        const tabContents = document.querySelectorAll('.tab-content');
+        const tabBtns = document.querySelectorAll('#menuModal .tab-btn');
+        const tabContents = document.querySelectorAll('#menuModal .tab-content');
         
         tabBtns.forEach(btn => {
             btn.onclick = function() {
@@ -705,6 +886,8 @@
         // --- SETTINGS LOGIC ---
         const themeToggle = document.getElementById('themeToggle');
         const videoSizeSlider = document.getElementById('videoSizeSlider');
+        const printPageBtn = document.getElementById('printPageBtn');
+        const downloadHtmlBtn = document.getElementById('downloadHtmlBtn');
         const defaultVideoWidth = 70;
         const settingsStorage = {
             theme: 'rhino-cheat-sheet-theme',
@@ -764,6 +947,31 @@
             writeStoredSetting(settingsStorage.videoWidth, sanitizedWidth);
         });
 
+        if (printPageBtn) {
+            printPageBtn.addEventListener('click', function() {
+                window.print();
+            });
+        }
+
+        if (downloadHtmlBtn) {
+            downloadHtmlBtn.addEventListener('click', function() {
+                try {
+                    const htmlContent = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+                    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = 'Rhino8_cheat_sheet_timestamps_interactive.html';
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+                    URL.revokeObjectURL(url);
+                } catch (error) {
+                    alert('Download is not supported in this browser. You can still use Print / Save PDF.');
+                }
+            });
+        }
+
         // --- CHAT LOGIC ---
         const chatBox = document.getElementById('chatBox');
         const chatInput = document.getElementById('chatInput');
@@ -780,14 +988,24 @@
 
         function formatMessage(text) {
             // Escape first so user-provided HTML never executes.
-            // Supported lightweight formatting: **bold**, *italic*, `code`, and newlines.
-            // Links/lists/headings are intentionally not parsed.
+            // Supported lightweight formatting: **bold**, *italic*, `code`, [label](https://url), raw http(s) links, and newlines.
             let safe = escapeHtml(text);
+
+            const linkTokens = [];
+            safe = safe.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, function(match, label, url) {
+                const token = '__CHAT_LINK_' + linkTokens.length + '__';
+                linkTokens.push('<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + label + '</a>');
+                return token;
+            });
 
             // Basic markdown-like formatting.
             safe = safe.replace(/`([^`\n]+)`/g, '<code>$1</code>');
             safe = safe.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
             safe = safe.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+            safe = safe.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+            linkTokens.forEach(function(anchorHtml, index) {
+                safe = safe.replace('__CHAT_LINK_' + index + '__', anchorHtml);
+            });
             safe = safe.replace(/\n/g, '<br>');
             return safe;
         }
@@ -803,6 +1021,31 @@
         function handleSend() {
             const text = chatInput.value.trim();
             if (!text) return;
+
+            const lowerText = text.toLowerCase();
+
+            if (lowerText === 'host popup' || lowerText === '/host popup') {
+                appendMessage(text, true);
+                chatInput.value = '';
+                appendMessage('Opening hosting help popup now. Use this when you want the in-page guide and quick links.', false);
+                showVideoErrorPopup();
+                return;
+            }
+
+            if (lowerText === 'host' || lowerText === '/host') {
+                appendMessage(text, true);
+                chatInput.value = '';
+                appendMessage(
+                    'Congrats, you found the hidden command.\n'
+                    + 'You can find the manual here:\n'
+                    + '- [Manual PDF](' + YT_HELP_PDF + ')\n\n'
+                    + 'There is also a hosted version of the website via ngrok:\n'
+                    + '- [Rhino8_cheat_sheet_timestamps_interactive](' + YT_HELP_INTERACTIVE + ')\n\n'
+                    + 'Tip: type `host popup` if you want the helper popup and CodePen guide.',
+                    false
+                );
+                return;
+            }
             
             appendMessage(text, true);
             chatInput.value = '';
