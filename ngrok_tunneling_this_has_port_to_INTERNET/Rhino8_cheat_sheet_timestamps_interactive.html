@@ -623,7 +623,10 @@
         function parseTimeStr(timeStr) {
             // Supported timestamp formats: mm:ss and h:mm:ss.
             // Invalid or unexpected formats safely fall back to 0.
-            let parts = timeStr.split(':').map(Number);
+            if (typeof timeStr !== 'string') return 0;
+
+            let parts = timeStr.trim().split(':').map(Number);
+            if (parts.some(part => !Number.isFinite(part) || part < 0 || !Number.isInteger(part))) return 0;
             if (parts.length === 2) return parts[0] * 60 + parts[1];
             if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
             return 0;
@@ -634,7 +637,7 @@
                 e.preventDefault();
 
                 // 3. Check if YouTube is fully loaded before trying to jump
-                if(!isPlayerReady || typeof player.seekTo !== 'function') {
+                if(!isPlayerReady || typeof player.seekTo !== 'function' || typeof player.playVideo !== 'function') {
                     alert("The YouTube video is still connecting. Please wait one second and try again.");
                     return;
                 }
@@ -675,6 +678,7 @@
         // --- SETTINGS LOGIC ---
         const themeToggle = document.getElementById('themeToggle');
         const videoSizeSlider = document.getElementById('videoSizeSlider');
+        const defaultVideoWidth = 70;
         const settingsStorage = {
             theme: 'rhino-cheat-sheet-theme',
             videoWidth: 'rhino-cheat-sheet-video-width'
@@ -696,6 +700,12 @@
             }
         }
 
+        function sanitizeVideoWidth(value) {
+            const numericValue = Number(value);
+            if (!Number.isFinite(numericValue)) return defaultVideoWidth;
+            return Math.min(80, Math.max(40, Math.round(numericValue)));
+        }
+
         function applyTheme(isDark) {
             document.body.classList.toggle('dark-theme', isDark);
             themeToggle.checked = isDark;
@@ -713,14 +723,18 @@
 
         const savedVideoWidth = readStoredSetting(settingsStorage.videoWidth);
         if (savedVideoWidth) {
-            videoSizeSlider.value = savedVideoWidth;
+            videoSizeSlider.value = String(sanitizeVideoWidth(savedVideoWidth));
+        } else {
+            videoSizeSlider.value = String(defaultVideoWidth);
         }
-        document.documentElement.style.setProperty('--video-width', videoSizeSlider.value + '%');
+        document.documentElement.style.setProperty('--video-width', sanitizeVideoWidth(videoSizeSlider.value) + '%');
 
         // This slider updates the CSS variable live and persists the chosen width.
         videoSizeSlider.addEventListener('input', function() {
-            document.documentElement.style.setProperty('--video-width', this.value + '%');
-            writeStoredSetting(settingsStorage.videoWidth, this.value);
+            const sanitizedWidth = sanitizeVideoWidth(this.value);
+            this.value = String(sanitizedWidth);
+            document.documentElement.style.setProperty('--video-width', sanitizedWidth + '%');
+            writeStoredSetting(settingsStorage.videoWidth, sanitizedWidth);
         });
 
         // --- CHAT LOGIC ---
