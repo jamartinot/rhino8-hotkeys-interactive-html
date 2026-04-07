@@ -37,8 +37,8 @@ desktop.ini
 *.tar.gz
 *.yml
 
-# Ignore the cai directory
-cai/
+# Ignore the cai directory under the ngrok tunneling folder
+/ngrok_tunneling_this_has_port_to_INTERNET/cai/
 
 #ignore commit-history.txt
 commit-history.txt
