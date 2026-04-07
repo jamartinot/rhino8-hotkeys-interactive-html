@@ -1,14 +1,8 @@
 const FALLBACK_REFRESH_SECONDS = 60;
-const MAX_LOG_LINES = 500;
-const FILTER_DEBOUNCE_MS = 300;
+const MAX_LOG_LINES = 400;
 
 const state = {
-  stats: null,
-  dimensions: null,
-  logs: {
-    local: "",
-    ngrok: "",
-  },
+  connection: "reconnecting",
   filters: {
     ip: "",
     site: "",
@@ -18,270 +12,312 @@ const state = {
     ipSort: "requests",
     ipOrder: "desc",
   },
-  connection: {
-    status: "offline",
-    retryDelayMs: 1000,
-    retryTimer: null,
-    eventSource: null,
-  },
   ui: {
-    autoScroll: true,
-    bannerType: "info",
-    bannerText: "",
+    actionBusy: false,
+    logsPaused: false,
   },
-  requests: {
-    controller: null,
-    debounceTimer: null,
-    refreshInFlight: false,
-    lastRefreshAt: null,
+  data: {
+    tasks: [],
+    localLog: "",
+    ngrokLog: "",
+    stats: {},
+    dimensions: {
+      ips: [],
+      sites: [],
+      statuses: [],
+      status_explanations: {},
+    },
+  },
+  meta: {
+    lastRefresh: "--",
+    actionMessage: "",
+    error: "",
   },
 };
 
+let tick = FALLBACK_REFRESH_SECONDS;
+let eventSource = null;
+let refreshTimer = null;
+let countdownTimer = null;
+
+const dom = {};
+const lastRender = {};
+
 function byId(id) {
-  return document.getElementById(id);
+  if (!(id in dom)) {
+    dom[id] = document.getElementById(id);
+  }
+  return dom[id];
 }
 
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-function setBanner(text, type = "info") {
-  state.ui.bannerText = text;
-  state.ui.bannerType = type;
-  const banner = byId("global-banner");
-  if (!banner) {
+function setBanner(text, isError = false) {
+  const banner = byId("error-banner");
+  if (!banner) return;
+  if (!text) {
+    banner.textContent = "";
+    banner.hidden = true;
     return;
   }
   banner.textContent = text;
-  banner.dataset.type = type;
+  banner.hidden = false;
+  banner.classList.toggle("error-banner--error", isError);
 }
 
 function setActionResult(text, isError = false) {
   const el = byId("action-result");
-  el.textContent = text;
-  el.dataset.type = isError ? "error" : "ok";
-}
-
-function setConnectionStatus(status, detail = "") {
-  state.connection.status = status;
-  const el = byId("connection-status");
   if (!el) return;
-  el.dataset.status = status;
-  el.textContent = detail || status;
+  el.textContent = text;
+  el.style.color = isError ? "#8a1f2d" : "#0f5132";
 }
 
-function setLoading(isLoading) {
-  document.body.dataset.loading = isLoading ? "true" : "false";
-  for (const id of ["start-all", "stop-all", "restart-all"]) {
+function setConnectionStatus(kind) {
+  state.connection = kind;
+  const badge = byId("conn-status");
+  if (!badge) return;
+  badge.classList.remove("connected", "reconnecting", "offline");
+  badge.classList.add(kind);
+  badge.textContent = kind === "connected" ? "● Live" : kind === "offline" ? "● Offline" : "● Reconnecting";
+}
+
+function setBusy(value) {
+  state.ui.actionBusy = value;
+  for (const id of ["start-all", "stop-all", "restart-btn"]) {
     const button = byId(id);
-    if (button) button.disabled = isLoading;
+    if (button) button.disabled = value;
   }
 }
 
-function setUrlFromState() {
-  const url = new URL(window.location.href);
-  const params = url.searchParams;
-  const setParam = (key, value) => {
-    if (value) params.set(key, value);
-    else params.delete(key);
-  };
-
-  setParam("ip", state.filters.ip);
-  setParam("site", state.filters.site);
-  setParam("status", state.filters.status);
-  setParam("ip_sort", state.sort.ipSort);
-  setParam("ip_order", state.sort.ipOrder);
-  setParam("auto_scroll", state.ui.autoScroll ? "1" : "0");
-  history.replaceState({}, "", url);
-}
-
-function applyStateFromUrl() {
+function readUrlFilters() {
   const params = new URLSearchParams(window.location.search);
   state.filters.ip = params.get("ip") || "";
   state.filters.site = params.get("site") || "";
   state.filters.status = params.get("status") || "";
-  state.sort.ipSort = params.get("ip_sort") || "requests";
-  state.sort.ipOrder = params.get("ip_order") || "desc";
-  const autoScroll = params.get("auto_scroll");
-  state.ui.autoScroll = autoScroll == null ? true : autoScroll !== "0";
 }
 
-function updateActiveFilters() {
-  const target = byId("active-filters");
-  if (!target) return;
-  const entries = [];
-  if (state.filters.ip) entries.push(`IP: ${escapeHtml(state.filters.ip)}`);
-  if (state.filters.site) entries.push(`Site: ${escapeHtml(state.filters.site)}`);
-  if (state.filters.status) entries.push(`Status: ${escapeHtml(state.filters.status)}`);
-  target.innerHTML = entries.length ? entries.join(" <span class='sep'>•</span> ") : "No active filters";
-}
+function setUrlFilters() {
+  const url = new URL(window.location.href);
+  const params = url.searchParams;
+  const pairs = [
+    ["ip", state.filters.ip],
+    ["site", state.filters.site],
+    ["status", state.filters.status],
+  ];
 
-function updateControlsFromState() {
-  const bindValue = (id, value) => {
-    const el = byId(id);
-    if (el) el.value = value;
-  };
-  bindValue("filter-ip", state.filters.ip);
-  bindValue("filter-site", state.filters.site);
-  bindValue("filter-status", state.filters.status);
-  bindValue("ip-sort", state.sort.ipSort);
-  bindValue("ip-order", state.sort.ipOrder);
-  const autoScroll = byId("auto-scroll");
-  if (autoScroll) autoScroll.checked = state.ui.autoScroll;
-  updateActiveFilters();
-}
-
-function showError(message) {
-  setBanner(message, "error");
-}
-
-function showInfo(message) {
-  setBanner(message, "info");
-}
-
-async function readErrorMessage(response) {
-  const contentType = response.headers.get("content-type") || "";
-  if (contentType.includes("application/json")) {
-    try {
-      const payload = await response.json();
-      return payload.error || `Request failed (${response.status})`;
-    } catch {
-      return `Request failed (${response.status})`;
+  for (const [key, value] of pairs) {
+    if (value) {
+      params.set(key, value);
+    } else {
+      params.delete(key);
     }
   }
-  try {
-    const text = await response.text();
-    return text || `Request failed (${response.status})`;
-  } catch {
-    return `Request failed (${response.status})`;
+
+  window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
+function formatFilters() {
+  const parts = [];
+  if (state.filters.ip) parts.push(`IP: ${state.filters.ip}`);
+  if (state.filters.site) parts.push(`Site: ${state.filters.site}`);
+  if (state.filters.status) parts.push(`Status: ${state.filters.status}`);
+  return parts.length ? parts.join(" | ") : "No active filters";
+}
+
+function syncSelectValue(selectId, value) {
+  const select = byId(selectId);
+  if (select) {
+    select.value = value || "";
   }
 }
 
-async function fetchJson(url, options = {}) {
-  const response = await fetch(url, options);
-  if (!response.ok) {
-    throw new Error(await readErrorMessage(response));
+function fillSelectOptions(selectId, values, currentValue) {
+  const select = byId(selectId);
+  if (!select) return;
+
+  const options = Array.from(new Set(values || []));
+  if (currentValue && !options.includes(currentValue)) {
+    options.unshift(currentValue);
   }
-  return response.json();
+
+  const fragment = document.createDocumentFragment();
+  const allOption = document.createElement("option");
+  allOption.value = "";
+  allOption.textContent = "All";
+  fragment.appendChild(allOption);
+
+  for (const value of options) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = value;
+    fragment.appendChild(option);
+  }
+
+  select.replaceChildren(fragment);
+  select.value = currentValue || "";
 }
 
-async function fetchText(url, options = {}) {
-  const response = await fetch(url, options);
-  if (!response.ok) {
-    throw new Error(await readErrorMessage(response));
+function renderSection(key, signature, fn) {
+  if (lastRender[key] === signature) {
+    return;
   }
-  return response.text();
+  lastRender[key] = signature;
+  fn();
 }
 
-function scheduleRefresh(delay = FILTER_DEBOUNCE_MS) {
-  if (state.requests.debounceTimer) {
-    clearTimeout(state.requests.debounceTimer);
-  }
-  state.requests.debounceTimer = setTimeout(() => {
-    state.requests.debounceTimer = null;
-    refreshAll();
-  }, delay);
-}
-
-function abortCurrentRefresh() {
-  if (state.requests.controller) {
-    state.requests.controller.abort();
-  }
-}
-
-function renderStatus(tasks) {
+function renderStatusCards() {
   const wrap = byId("status-cards");
-  wrap.replaceChildren();
+  if (!wrap) return;
 
-  if (!tasks || tasks.length === 0) {
+  const tasks = state.data.tasks || [];
+  if (!tasks.length) {
+    wrap.replaceChildren();
     const empty = document.createElement("article");
-    empty.className = "status-card empty-state";
+    empty.className = "status-card";
     empty.textContent = "No task data.";
     wrap.appendChild(empty);
     return;
   }
 
+  const fragment = document.createDocumentFragment();
   for (const task of tasks) {
     const card = document.createElement("article");
     card.className = "status-card";
+
     const title = document.createElement("h3");
     title.textContent = task.TaskName || "Task";
     card.appendChild(title);
 
     const kv = document.createElement("div");
     kv.className = "status-kv";
+
     if (task.Error) {
-      kv.append(makeKeyValue("Error", task.Error, true));
+      const key = document.createElement("span");
+      key.className = "k";
+      key.textContent = "Error";
+      const value = document.createElement("span");
+      value.className = "v";
+      value.textContent = task.Error;
+      kv.append(key, value);
     } else {
-      kv.append(
-        makeKeyValue("State", task.State || "-"),
-        makeKeyValue("Last Result", task.LastTaskResult ?? "-"),
-        makeKeyValue("Last Run", task.LastRunTime || "-"),
-        makeKeyValue("Next Run", task.NextRunTime || "-")
-      );
+      const entries = [
+        ["State", task.State || "-"],
+        ["Last Result", task.LastTaskResult ?? "-"],
+        ["Last Run", task.LastRunTime || "-"],
+        ["Next Run", task.NextRunTime || "-"],
+      ];
+
+      for (const [label, valueText] of entries) {
+        const key = document.createElement("span");
+        key.className = "k";
+        key.textContent = label;
+        const value = document.createElement("span");
+        value.className = "v";
+        value.textContent = String(valueText);
+        kv.append(key, value);
+      }
     }
+
     card.appendChild(kv);
-    wrap.appendChild(card);
+    fragment.appendChild(card);
+  }
+
+  wrap.replaceChildren(fragment);
+}
+
+function renderLogContainer(targetId, rawText) {
+  const target = byId(targetId);
+  if (!target) return;
+
+  const lines = String(rawText || "").split(/\r?\n/);
+  const limited = lines.slice(-MAX_LOG_LINES);
+  target.textContent = limited.join("\n") || "(empty)";
+  if (!state.ui.logsPaused) {
+    target.scrollTop = target.scrollHeight;
   }
 }
 
-function makeKeyValue(label, value, isError = false) {
-  const key = document.createElement("span");
-  key.className = "k";
-  key.textContent = label;
-
-  const val = document.createElement("span");
-  val.className = isError ? "v error" : "v";
-  val.textContent = value;
-
-  return [key, val].reduce((fragment, node) => {
-    fragment.appendChild(node);
-    return fragment;
-  }, document.createDocumentFragment());
-}
-
-function renderBars(targetId, items, cls, options = {}) {
+function renderBars(targetId, items, cls) {
   const target = byId(targetId);
-  target.replaceChildren();
+  if (!target) return;
 
-  if (!items || items.length === 0) {
+  const entries = items || [];
+  if (!entries.length) {
     target.textContent = "No data yet.";
     return;
   }
 
-  const max = Math.max(1, ...items.map((item) => item.value));
-  for (const item of items) {
-    const width = (item.value / max) * 100;
-    const row = document.createElement(options.clickable ? "button" : "div");
-    if (options.clickable) {
-      row.type = "button";
-    }
-    row.className = options.clickable ? "bar-row interactive" : "bar-row";
-    row.title = options.clickable ? options.tooltip(item) : item.label;
-    row.dataset.label = item.label;
-    row.dataset.value = String(item.value);
-    row.innerHTML = `
-      <div class="label">${escapeHtml(item.label)}</div>
-      <div class="bar-wrap"><div class="bar ${cls}" style="width:${width}%"></div></div>
-      <div class="val">${escapeHtml(item.value)}</div>
-    `;
-    if (options.clickable) {
-      row.addEventListener("click", () => options.onClick(item));
-    }
-    target.appendChild(row);
+  const max = Math.max(1, ...entries.map((item) => Number(item.value) || 0));
+  const fragment = document.createDocumentFragment();
+  for (const item of entries) {
+    const row = document.createElement("div");
+    row.className = "bar-row";
+    const width = ((Number(item.value) || 0) / max) * 100;
+
+    const label = document.createElement("div");
+    label.className = "label";
+    label.textContent = item.label;
+
+    const barWrap = document.createElement("div");
+    barWrap.className = "bar-wrap";
+    const bar = document.createElement("div");
+    bar.className = `bar ${cls}`;
+    bar.style.width = `${width}%`;
+    barWrap.appendChild(bar);
+
+    const value = document.createElement("div");
+    value.className = "val";
+    value.textContent = String(item.value);
+
+    row.append(label, barWrap, value);
+    fragment.appendChild(row);
   }
+
+  target.replaceChildren(fragment);
+}
+
+function renderStatsTable() {
+  const target = byId("stats-table");
+  if (!target) return;
+
+  const rows = state.data.stats.ip_stats || [];
+  if (!rows.length) {
+    target.textContent = "No IP stats yet.";
+    return;
+  }
+
+  const table = document.createElement("table");
+  table.className = "stats-table recent-table";
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th data-sort="ip" class="sortable">IP</th>
+        <th data-sort="requests" class="sortable">Requests</th>
+        <th data-sort="sites" class="sortable">Sites</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  `;
+
+  const body = table.querySelector("tbody");
+  for (const item of rows) {
+    const row = document.createElement("tr");
+    row.dataset.ip = item.label;
+    row.innerHTML = `
+      <td>${item.label}</td>
+      <td>${item.requests}</td>
+      <td>${item.sites}</td>
+    `;
+    body.appendChild(row);
+  }
+
+  target.replaceChildren(table);
 }
 
 function renderRecentRequests(targetId, items) {
   const target = byId(targetId);
-  target.replaceChildren();
+  if (!target) return;
 
-  if (!items || items.length === 0) {
+  const entries = (items || []).slice(0, 25);
+  if (!entries.length) {
     target.textContent = "No request history yet.";
     return;
   }
@@ -302,356 +338,383 @@ function renderRecentRequests(targetId, items) {
   `;
 
   const body = table.querySelector("tbody");
-  for (const item of items.slice(0, 25)) {
+  for (const item of entries) {
     const row = document.createElement("tr");
+    const explanation = state.data.stats.status_explanations?.[item.status] || "Standard HTTP status code.";
     row.innerHTML = `
-      <td>${escapeHtml(item.dt)}</td>
-      <td>${escapeHtml(item.method)}</td>
-      <td title="${escapeHtml(resolveStatusExplanation(item.status))}">${escapeHtml(item.status)}</td>
-      <td title="${escapeHtml(item.path)}">${escapeHtml(item.path)}</td>
-      <td>${escapeHtml(item.ip)}</td>
+      <td>${item.dt}</td>
+      <td>${item.method}</td>
+      <td title="${explanation}"><span class="status-pill">${item.status}</span></td>
+      <td title="${item.path}">${item.path}</td>
+      <td>${item.ip}</td>
     `;
     body.appendChild(row);
   }
 
-  target.appendChild(table);
-}
-
-function resolveStatusExplanation(code) {
-  const explanations = state.stats?.status_explanations || {};
-  return explanations[code] || "Standard HTTP status code.";
+  target.replaceChildren(table);
 }
 
 function renderStatusExplanations(targetId, explanations) {
   const target = byId(targetId);
-  target.replaceChildren();
+  if (!target) return;
+
   const entries = Object.entries(explanations || {});
-  if (entries.length === 0) {
+  if (!entries.length) {
     target.textContent = "No status codes in current selection.";
     return;
   }
 
   const table = document.createElement("table");
   table.className = "recent-table";
-  table.innerHTML = "<thead><tr><th>Status</th><th>Explanation</th></tr></thead><tbody></tbody>";
+  table.innerHTML = `
+    <thead><tr><th>Status</th><th>Explanation</th></tr></thead>
+    <tbody></tbody>
+  `;
+
   const body = table.querySelector("tbody");
   for (const [code, explanation] of entries) {
     const row = document.createElement("tr");
-    row.innerHTML = `<td title="${escapeHtml(explanation)}">${escapeHtml(code)}</td><td>${escapeHtml(explanation)}</td>`;
+    row.innerHTML = `<td>${code}</td><td>${explanation}</td>`;
     body.appendChild(row);
   }
-  target.appendChild(table);
+
+  target.replaceChildren(table);
 }
 
-function renderLog(targetId, text) {
-  const target = byId(targetId);
-  target.replaceChildren();
-  const lines = String(text || "")
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .slice(-MAX_LOG_LINES);
-
-  if (lines.length === 0) {
-    target.textContent = "(empty)";
-    return;
+function renderFilters() {
+  const active = byId("active-filters");
+  if (active) {
+    active.textContent = formatFilters();
   }
 
-  const fragment = document.createDocumentFragment();
-  for (const line of lines) {
-    const row = document.createElement("div");
-    row.className = `log-line ${statusClassForLine(line)}`;
-    row.innerHTML = escapeHtml(line);
-    fragment.appendChild(row);
-  }
-  target.appendChild(fragment);
+  syncSelectValue("filter-ip", state.filters.ip);
+  syncSelectValue("filter-site", state.filters.site);
+  syncSelectValue("filter-status", state.filters.status);
 
-  if (state.ui.autoScroll) {
-    target.scrollTop = target.scrollHeight;
+  const toggleScroll = byId("toggle-scroll");
+  if (toggleScroll) toggleScroll.textContent = state.ui.logsPaused ? "Resume" : "Pause";
+
+  for (const id of ["start-all", "stop-all", "restart-btn"]) {
+    const button = byId(id);
+    if (button) button.disabled = state.ui.actionBusy;
   }
 }
 
-function statusClassForLine(line) {
-  const match = line.match(/\s(\d{3})\s/);
-  if (!match) return "status-plain";
-  const code = Number(match[1]);
-  if (code >= 500) return "status-5xx";
-  if (code >= 400) return "status-4xx";
-  if (code >= 200) return "status-2xx";
-  return "status-plain";
+function renderHeader() {
+  const lastRefresh = byId("last-refresh");
+  if (lastRefresh) lastRefresh.textContent = `Last refresh: ${state.meta.lastRefresh}`;
+
+  const nextRefresh = byId("next-refresh");
+  if (nextRefresh) {
+    nextRefresh.textContent = state.connection === "connected"
+      ? "Live updates connected"
+      : `Fallback refresh in ${tick}s`;
+  }
+
+  setBanner(state.meta.error, Boolean(state.meta.error));
+  const actionResult = byId("action-result");
+  if (actionResult) {
+    actionResult.textContent = state.meta.actionMessage;
+    actionResult.style.color = state.meta.actionMessage.startsWith("Error") ? "#8a1f2d" : "#0f5132";
+  }
+
+  renderStatusCards();
+  renderFilters();
 }
 
-function fillSelectOptions(selectId, values, currentValue) {
-  const select = byId(selectId);
-  if (!select) return;
-  select.replaceChildren();
-  const allOption = document.createElement("option");
-  allOption.value = "";
-  allOption.textContent = "All";
-  select.appendChild(allOption);
+function renderLogs() {
+  renderLogContainer("logs-local", state.data.localLog);
+  renderLogContainer("logs-ngrok", state.data.ngrokLog);
+}
 
-  for (const value of values || []) {
-    const option = document.createElement("option");
-    option.value = value;
-    option.textContent = value;
-    if (value === currentValue) {
-      option.selected = true;
+function renderStats() {
+  const stats = state.data.stats || {};
+  renderBars("chart-files", stats.top_files || [], "files");
+  renderBars("chart-methods", stats.methods || [], "methods");
+  renderBars("chart-status", stats.status_codes || [], "status");
+  renderBars("chart-families", stats.status_families || [], "families");
+  renderStatsTable();
+  renderBars("chart-sites-per-ip", stats.sites_per_ip || [], "methods");
+  renderBars("chart-hourly", stats.hourly || [], "hourly");
+  renderRecentRequests("recent-requests", stats.recent_requests || []);
+  renderStatusExplanations("status-explanations", stats.status_explanations || {});
+}
+
+function render() {
+  const headerSignature = JSON.stringify({
+    connection: state.connection,
+    lastRefresh: state.meta.lastRefresh,
+    error: state.meta.error,
+    actionMessage: state.meta.actionMessage,
+    busy: state.ui.actionBusy,
+    filters: state.filters,
+    tasks: state.data.tasks,
+  });
+  const logsSignature = JSON.stringify({
+    local: state.data.localLog,
+    ngrok: state.data.ngrokLog,
+    paused: state.ui.logsPaused,
+  });
+  const filtersSignature = JSON.stringify({
+    filters: state.filters,
+    dimensions: state.data.dimensions,
+  });
+  const statsSignature = JSON.stringify({
+    stats: state.data.stats,
+    sort: state.sort,
+  });
+
+  renderSection("header", headerSignature, renderHeader);
+  renderSection("logs", logsSignature, renderLogs);
+  renderSection("filters", filtersSignature, renderFilters);
+  renderSection("stats", statsSignature, renderStats);
+}
+
+function fetchJson(url) {
+  return fetch(url).then(async (response) => {
+    if (!response.ok) {
+      throw new Error(`${url} failed: ${response.status}`);
     }
-    select.appendChild(option);
-  }
+    return response.json();
+  });
+}
+
+function fetchText(url) {
+  return fetch(url).then(async (response) => {
+    if (!response.ok) {
+      throw new Error(`${url} failed: ${response.status}`);
+    }
+    return response.text();
+  });
+}
+
+function updateDimensionsControls() {
+  const dimensions = state.data.dimensions || {};
+  fillSelectOptions("filter-ip", dimensions.ips || [], state.filters.ip);
+  fillSelectOptions("filter-site", dimensions.sites || [], state.filters.site);
+  fillSelectOptions("filter-status", dimensions.statuses || [], state.filters.status);
 }
 
 async function loadDimensions() {
   const payload = await fetchJson("/api/dimensions");
-  state.dimensions = payload.dimensions || {};
-  fillSelectOptions("filter-ip", state.dimensions.ips || [], state.filters.ip);
-  fillSelectOptions("filter-site", state.dimensions.sites || [], state.filters.site);
-  fillSelectOptions("filter-status", state.dimensions.statuses || [], state.filters.status);
-}
-
-function buildStatsUrl() {
-  const params = new URLSearchParams({
-    top: "20",
-    ip_sort: state.sort.ipSort,
-    ip_order: state.sort.ipOrder,
-  });
-  if (state.filters.ip) params.set("ip", state.filters.ip);
-  if (state.filters.site) params.set("site", state.filters.site);
-  if (state.filters.status) params.set("status", state.filters.status);
-  return `/api/stats?${params.toString()}`;
+  state.data.dimensions = payload.dimensions || {};
+  updateDimensionsControls();
 }
 
 async function refreshAll() {
-  abortCurrentRefresh();
-  const controller = new AbortController();
-  state.requests.controller = controller;
-  state.requests.refreshInFlight = true;
-  setLoading(true);
-
   try {
     const [status, localLog, ngrokLog, statsResp] = await Promise.all([
-      fetchJson("/api/status", { signal: controller.signal }),
-      fetchText("/api/log/local?tail=120", { signal: controller.signal }),
-      fetchText("/api/log/ngrok?tail=120", { signal: controller.signal }),
-      fetchJson(buildStatsUrl(), { signal: controller.signal }),
+      fetchJson("/api/status"),
+      fetchText("/api/log/local?tail=400"),
+      fetchText("/api/log/ngrok?tail=400"),
+      fetchJson(`/api/stats?top=20&ip_sort=${encodeURIComponent(state.sort.ipSort)}&ip_order=${encodeURIComponent(state.sort.ipOrder)}&ip=${encodeURIComponent(state.filters.ip)}&site=${encodeURIComponent(state.filters.site)}&status=${encodeURIComponent(state.filters.status)}`),
     ]);
 
-    if (controller.signal.aborted) {
-      return;
-    }
-
-    renderStatus(status.tasks || []);
-    state.logs.local = localLog;
-    state.logs.ngrok = ngrokLog;
-    renderLog("local-log", state.logs.local);
-    renderLog("ngrok-log", state.logs.ngrok);
-
-    state.stats = statsResp.stats || {};
-    renderBars("chart-files", state.stats.top_files || [], "files", {
-      clickable: true,
-      tooltip: (item) => `Filter to ${item.label}`,
-      onClick: (item) => setFilter("site", item.label),
-    });
-    renderBars("chart-methods", state.stats.methods || [], "methods");
-    renderBars("chart-status", state.stats.status_codes || [], "status", {
-      clickable: true,
-      tooltip: (item) => resolveStatusExplanation(item.label),
-      onClick: (item) => setFilter("status", item.label),
-    });
-    renderBars("chart-families", state.stats.status_families || [], "families");
-    renderBars("chart-ips", state.stats.top_ips || [], "ips", {
-      clickable: true,
-      tooltip: (item) => `Filter to ${item.label}`,
-      onClick: (item) => setFilter("ip", item.label),
-    });
-    renderBars("chart-sites-per-ip", state.stats.sites_per_ip || [], "methods");
-    renderBars("chart-hourly", state.stats.hourly || [], "hourly");
-    renderRecentRequests("recent-requests", state.stats.recent_requests || []);
-    renderStatusExplanations("status-explanations", state.stats.status_explanations || {});
-
-    state.requests.lastRefreshAt = new Date();
-    byId("last-refresh").textContent = `Last refresh: ${state.requests.lastRefreshAt.toLocaleTimeString()}`;
-  } catch (error) {
-    if (error.name !== "AbortError") {
-      showError(`Refresh failed: ${error.message}`);
-    }
-  } finally {
-    if (state.requests.controller === controller) {
-      state.requests.controller = null;
-      state.requests.refreshInFlight = false;
-      setLoading(false);
-    }
+    state.data.tasks = status.tasks || [];
+    state.data.localLog = localLog || "";
+    state.data.ngrokLog = ngrokLog || "";
+    state.data.stats = statsResp.stats || {};
+    state.meta.lastRefresh = new Date().toLocaleTimeString();
+    state.meta.error = "";
+    tick = FALLBACK_REFRESH_SECONDS;
+    render();
+  } catch (err) {
+    state.meta.error = `Refresh error: ${err.message}`;
+    render();
   }
-}
-
-function setFilter(kind, value) {
-  state.filters[kind] = value || "";
-  updateControlsFromState();
-  setUrlFromState();
-  scheduleRefresh();
-}
-
-function bindFilterControl(selectId, kind) {
-  const select = byId(selectId);
-  if (!select) return;
-  select.addEventListener("change", () => setFilter(kind, select.value || ""));
-}
-
-function scheduleReconnect() {
-  if (state.connection.retryTimer) {
-    return;
-  }
-  const delay = state.connection.retryDelayMs;
-  setConnectionStatus("reconnecting", `reconnecting in ${Math.round(delay / 1000)}s`);
-  state.connection.retryTimer = setTimeout(() => {
-    state.connection.retryTimer = null;
-    connectLiveEvents();
-  }, delay);
-  state.connection.retryDelayMs = Math.min(state.connection.retryDelayMs * 2, 30000);
 }
 
 function connectLiveEvents() {
-  if (state.connection.eventSource) {
-    state.connection.eventSource.close();
+  if (eventSource) {
+    eventSource.close();
   }
 
-  const source = new EventSource("/api/events");
-  state.connection.eventSource = source;
-  setConnectionStatus("connecting", "connecting");
-
-  source.onopen = () => {
-    state.connection.retryDelayMs = 1000;
-    setConnectionStatus("connected", "connected");
-    if (state.connection.retryTimer) {
-      clearTimeout(state.connection.retryTimer);
-      state.connection.retryTimer = null;
-    }
-  };
-
-  source.addEventListener("update", () => {
-    scheduleRefresh(0);
+  eventSource = new EventSource("/api/events");
+  eventSource.onopen = () => setConnectionStatus("connected");
+  eventSource.addEventListener("update", async () => {
+    await refreshAll();
   });
-
-  source.onerror = () => {
-    setConnectionStatus("offline", "connection lost");
-    source.close();
-    state.connection.eventSource = null;
-    scheduleReconnect();
+  eventSource.onerror = () => {
+    setConnectionStatus("reconnecting");
   };
-}
-
-function updateCountdown() {
-  const nextRefresh = byId("next-refresh");
-  if (!nextRefresh) return;
-  if (state.connection.status === "connected") {
-    nextRefresh.textContent = "Live updates connected";
-    return;
-  }
-
-  const remaining = Math.max(0, FALLBACK_REFRESH_SECONDS - Math.floor((Date.now() - (state.requests.lastRefreshAt?.getTime() || 0)) / 1000));
-  nextRefresh.textContent = `Fallback refresh in ${remaining}s`;
 }
 
 async function taskAction(action) {
-  const riskyActions = new Set(["stop-all", "restart-all"]);
-  if (riskyActions.has(action) && !window.confirm(`Confirm ${action.replace("-", " ")} ?`)) {
+  if (action === "restart-all" && !window.confirm("Restart services?")) {
     return;
   }
 
   try {
+    setBusy(true);
     setActionResult("Running action...");
-    setLoading(true);
     const response = await fetch(`/api/tasks/${action}`, { method: "POST" });
     const data = await response.json();
     if (!response.ok || !data.ok) {
       throw new Error(data.error || `Action failed (${response.status})`);
     }
-    setActionResult(`${action} completed.`);
-    showInfo(`${action} completed.`);
+    state.meta.actionMessage = `${action} completed.`;
+    state.meta.error = "";
     await refreshAll();
-  } catch (error) {
-    setActionResult(error.message, true);
-    showError(error.message);
+  } catch (err) {
+    state.meta.error = err.message;
+    state.meta.actionMessage = `Error: ${err.message}`;
+    render();
   } finally {
-    setLoading(false);
+    setBusy(false);
+    render();
+  }
+}
+
+function scrollLogsToLatest() {
+  for (const targetId of ["logs-local", "logs-ngrok"]) {
+    const target = byId(targetId);
+    if (target) {
+      target.scrollTop = target.scrollHeight;
+    }
   }
 }
 
 function bindActions() {
-  byId("start-all").addEventListener("click", () => taskAction("start-all"));
-  byId("stop-all").addEventListener("click", () => taskAction("stop-all"));
-  byId("restart-all").addEventListener("click", () => taskAction("restart-all"));
-
+  const startBtn = byId("start-all");
+  const stopBtn = byId("stop-all");
+  const restartBtn = byId("restart-btn");
+  const toggleScrollBtn = byId("toggle-scroll");
+  const jumpLatestBtn = byId("jump-latest");
+  const clearFiltersBtn = byId("clear-filters");
   const ipSortEl = byId("ip-sort");
   const ipOrderEl = byId("ip-order");
+  const filterIpEl = byId("filter-ip");
+  const filterSiteEl = byId("filter-site");
+  const filterStatusEl = byId("filter-status");
+  const statsTable = byId("stats-table");
+
+  if (startBtn) startBtn.addEventListener("click", () => taskAction("start-all"));
+  if (stopBtn) stopBtn.addEventListener("click", () => taskAction("stop-all"));
+  if (restartBtn) restartBtn.addEventListener("click", () => taskAction("restart-all"));
+
+  if (toggleScrollBtn) {
+    toggleScrollBtn.addEventListener("click", () => {
+      state.ui.logsPaused = !state.ui.logsPaused;
+      render();
+      if (!state.ui.logsPaused) {
+        scrollLogsToLatest();
+      }
+    });
+  }
+
+  if (jumpLatestBtn) {
+    jumpLatestBtn.addEventListener("click", () => {
+      state.ui.logsPaused = false;
+      render();
+      scrollLogsToLatest();
+    });
+  }
+
   if (ipSortEl) {
-    ipSortEl.addEventListener("change", () => {
+    ipSortEl.addEventListener("change", async () => {
       state.sort.ipSort = ipSortEl.value || "requests";
-      updateActiveFilters();
-      setUrlFromState();
-      scheduleRefresh();
+      render();
+      await refreshAll();
     });
   }
+
   if (ipOrderEl) {
-    ipOrderEl.addEventListener("change", () => {
+    ipOrderEl.addEventListener("change", async () => {
       state.sort.ipOrder = ipOrderEl.value || "desc";
-      updateActiveFilters();
-      setUrlFromState();
-      scheduleRefresh();
+      render();
+      await refreshAll();
     });
   }
 
-  bindFilterControl("filter-ip", "ip");
-  bindFilterControl("filter-site", "site");
-  bindFilterControl("filter-status", "status");
-
-  const clearFiltersEl = byId("clear-filters");
-  if (clearFiltersEl) {
-    clearFiltersEl.addEventListener("click", () => {
-      state.filters.ip = "";
-      state.filters.site = "";
-      state.filters.status = "";
-      updateControlsFromState();
-      setUrlFromState();
-      scheduleRefresh(0);
+  if (filterIpEl) {
+    filterIpEl.addEventListener("change", async () => {
+      state.filters.ip = filterIpEl.value || "";
+      setUrlFilters();
+      render();
+      await refreshAll();
     });
   }
 
-  const autoScrollEl = byId("auto-scroll");
-  if (autoScrollEl) {
-    autoScrollEl.addEventListener("change", () => {
-      state.ui.autoScroll = autoScrollEl.checked;
-      setUrlFromState();
-      renderLog("local-log", state.logs.local);
-      renderLog("ngrok-log", state.logs.ngrok);
+  if (filterSiteEl) {
+    filterSiteEl.addEventListener("change", async () => {
+      state.filters.site = filterSiteEl.value || "";
+      setUrlFilters();
+      render();
+      await refreshAll();
+    });
+  }
+
+  if (filterStatusEl) {
+    filterStatusEl.addEventListener("change", async () => {
+      state.filters.status = filterStatusEl.value || "";
+      setUrlFilters();
+      render();
+      await refreshAll();
+    });
+  }
+
+  if (clearFiltersBtn) {
+    clearFiltersBtn.addEventListener("click", async () => {
+      state.filters = { ip: "", site: "", status: "" };
+      setUrlFilters();
+      render();
+      await refreshAll();
+    });
+  }
+
+  if (statsTable) {
+    statsTable.addEventListener("click", (event) => {
+      const sortHeader = event.target.closest("th[data-sort]");
+      if (sortHeader) {
+        const nextSort = sortHeader.dataset.sort || "requests";
+        if (state.sort.ipSort === nextSort) {
+          state.sort.ipOrder = state.sort.ipOrder === "asc" ? "desc" : "asc";
+        } else {
+          state.sort.ipSort = nextSort;
+        }
+        render();
+        refreshAll();
+        return;
+      }
+
+      const row = event.target.closest("tr[data-ip]");
+      if (row && row.dataset.ip) {
+        state.filters.ip = row.dataset.ip;
+        setUrlFilters();
+        render();
+        refreshAll();
+      }
     });
   }
 }
 
-async function boot() {
-  applyStateFromUrl();
-  updateControlsFromState();
-  bindActions();
-  connectLiveEvents();
-
-  try {
-    await loadDimensions();
-  } catch (error) {
-    showError(`Failed to load filters: ${error.message}`);
+function startCountdown() {
+  if (countdownTimer) {
+    clearInterval(countdownTimer);
   }
-
-  await refreshAll();
-  window.addEventListener("popstate", () => {
-    applyStateFromUrl();
-    updateControlsFromState();
-    refreshAll();
-  });
-
-  setInterval(updateCountdown, 1000);
-  setInterval(() => {
-    if (state.connection.status !== "connected") {
-      scheduleRefresh(0);
+  countdownTimer = setInterval(() => {
+    tick = Math.max(0, tick - 1);
+    const nextRefresh = byId("next-refresh");
+    if (nextRefresh) {
+      nextRefresh.textContent = state.connection === "connected"
+        ? "Live updates connected"
+        : `Fallback refresh in ${tick}s`;
     }
-  }, FALLBACK_REFRESH_SECONDS * 1000);
+  }, 1000);
+}
+
+async function boot() {
+  readUrlFilters();
+  bindActions();
+  render();
+  await loadDimensions();
+  connectLiveEvents();
+  await refreshAll();
+  startCountdown();
+  if (refreshTimer) {
+    clearInterval(refreshTimer);
+  }
+  refreshTimer = setInterval(refreshAll, FALLBACK_REFRESH_SECONDS * 1000);
 }
 
 boot();

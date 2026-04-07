@@ -1,6 +1,8 @@
 # Rhino 8 Interactive Cheat Sheet Manual
 
-Converted from [Rhino 8 Interactive Cheat Sheet Manual.pdf](Rhino%208%20Interactive%20Cheat%20Sheet%20Manual.pdf).
+Converted from [Rhino 8 Interactive Cheat Sheet Manual.pdf](https://github.com/jamartinot/rhino8-hotkeys-interactive-html/blob/main/ngrok_tunneling_this_has_port_to_INTERNET/Rhino%208%20Interactive%20Cheat%20Sheet%20Manual.pdf)
+website hosted on local/remote machine via ngrok: [https://extraterritorial-carlota-ironfisted.ngrok-free.dev/Rhino8_cheat_sheet_timestamps_interactive.html](https://extraterritorial-carlota-ironfisted.ngrok-free.dev/Rhino8_cheat_sheet_timestamps_interactive.html)
+
 
 ## Overview
 

@@ -218,7 +218,13 @@ def detect_text_encoding(path: Path) -> str:
 
     null_ratio = sample.count(b"\x00") / len(sample)
     if null_ratio > 0.15:
-        return "utf-16"
+        even_nulls = sample[0::2].count(0)
+        odd_nulls = sample[1::2].count(0)
+        if odd_nulls > even_nulls:
+          return "utf-16-le"
+        if even_nulls > odd_nulls:
+            return "utf-16-be"
+        return "utf-16-le"
 
     return "utf-8-sig"
 
