@@ -6,9 +6,12 @@ I built an adversarial test harness for [ngrok_tunneling_this_has_port_to_INTERN
 
 - timestamp parsing and click handling
 - YouTube player readiness checks
-- chat message formatting and HTML escaping
+- YouTube failure helper popup behavior
+- chat message formatting, HTML escaping, and hyperlink rendering
+- hidden chat host command behavior (`host` and `/host`)
 - persisted theme and video-width settings
 - modal and tab switching behavior
+- menu Print / Save PDF and Download HTML actions
 
 The harness lives at [tests/rhino8_interactive_security.test.js](tests/rhino8_interactive_security.test.js).
 
@@ -29,11 +32,35 @@ The harness lives at [tests/rhino8_interactive_security.test.js](tests/rhino8_in
 4. Chat rendering correctly escaped HTML in the tested paths.
    - Result: injected markup stayed inert in the harness.
 
+5. Popup fallback behavior needed explicit verification.
+   - Risk: users could remain blocked when YouTube fails locally if helper links do not appear.
+   - Fix: added direct popup tests for local protocol, timeout/failure states, close behavior, and host-command-triggered opening.
+
+6. Mobile menu utility actions needed regression coverage.
+   - Risk: print/download controls could silently break while core page tests still pass.
+   - Fix: added tests that verify print dispatch, download flow, and download fallback alert paths.
+
+7. Video error popup rendering conflicted with menu tab visibility rules.
+   - Risk: popup could show only the header while body content (links/guide) stayed hidden.
+   - Fix: moved popup body off the generic tab-content class and scoped menu tab selectors to `#menuModal`.
+
+8. YouTube startup failure did not auto-open helper popup.
+   - Risk: users on blocked/local environments would see no immediate recovery guidance.
+   - Fix: startup timeout now auto-opens popup when player is still not ready; `onError` also auto-opens popup.
+
+9. Host command links were hard to reuse in external docs.
+   - Risk: raw URLs are noisy and harder to copy as titled links.
+   - Fix: chat now supports labeled markdown links (`[Label](https://...)`) and host output uses clean labels.
+
+10. Local fallback flow did not remove unusable video area after popup dismissal.
+   - Risk: users stayed stuck with a dead video panel occupying screen space.
+   - Fix: after first error popup dismissal (while failure persists), app enters `video-unavailable-layout`: video is hidden and content uses a two-column layout on wide screens.
+
 ## Verification
 
 The final run passed all checks:
 
-- 9 passed
+- 56 passed
 - 0 failed
 
 Command used:
@@ -44,21 +71,27 @@ node tests/rhino8_interactive_security.test.js
 
 ### Tests Used
 
-- `parseTimeStr accepts valid formats and rejects malformed input` - passed
-- `timestamp clicks do not execute before the player is ready` - passed
-- `timestamp clicks seek and play when the player is ready` - passed
-- `timestamp clicks fail closed when the player is malformed` - passed
-- `chat rendering escapes HTML and preserves limited formatting` - passed
-- `blank chat input is ignored and long content stays inert` - passed
-- `saved video width is constrained to the slider range` - passed
-- `theme persistence prefers explicit saved state` - passed
-- `menu and tabs can be opened and closed without leaking state` - passed
+- 56 automated tests passed in [tests/rhino8_interactive_security.test.js](tests/rhino8_interactive_security.test.js), including:
+- parser edge cases (`mm:ss`, `h:mm:ss`, whitespace, null, negative/decimal/invalid input)
+- YouTube ready/error callbacks, delayed-failure timer behavior, and automatic popup triggering
+- timestamp click behavior for ready, waiting, malformed-player, mobile scroll, and popup fallback paths
+- settings persistence and clamping behavior for theme and video width
+- menu modal open/close plus tab switching display states
+- print button behavior and download success/fallback behavior
+- popup open/close/backdrop behavior, aria state changes, and tab-switch isolation
+- popup dismissal fallback behavior: first-open no layout switch, dismissal-triggered switch, ready-state no-switch, and persistence across reopens
+- chat behavior for normal send, enter/shift-enter, escaping/formatting, auto-linking, labeled markdown links, and `host`/`/host` helper commands
 
 ### What They Proved
 
 - Timestamp parsing no longer crashes on malformed or missing input.
 - Timestamp navigation does not run until the player is ready and complete.
+- Popup fallback with hosted/manual links is reachable through automatic failure paths and manual host commands.
+- Popup now auto-opens when YouTube startup fails, without requiring user clicks.
+- After first popup dismissal in unresolved failure cases, video is removed and content gets a better fallback layout.
+- Print/download controls execute their expected flows and fail safely when unsupported.
 - Chat messages stay inert when they contain HTML or oversized payloads.
+- Chat can show clean clickable link labels instead of raw URLs.
 - Persisted settings are clamped into supported values before being applied.
 - Modal and tab interactions still work after the hardening changes.
 
