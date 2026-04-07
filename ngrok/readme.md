@@ -1,324 +1,263 @@
-# Ngrok + Python Local Server Setup
+# Sticky Services Runbook (Local Python + ngrok)
 
-This guide documents everything set up to serve one local folder with Python, tunnel it with ngrok, keep both services sticky after reboot, and verify or troubleshoot each step.
+Purpose: this is not a full setup guide. It is a record of what was configured and how to operate and troubleshoot it later.
 
-## What This Setup Does
+## Setup Snapshot (What Was Done)
 
-- Starts a Python web server for only this folder:
+- Local static server is a Scheduled Task: `LocalStaticServer-8000`
+- ngrok tunnel is a Scheduled Task: `Ngrok-8000`
+- Local server serves only this folder:
   `C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok_tunneling_this_has_port_to_INTERNET`
-- Tunnels that local server through ngrok on port `8000`
-- Runs both services in the background after reboot
-- Writes logs to text files so you can inspect them later
+- Port in use: `8000`
+- Logs:
+  - `C:\ProgramData\localserver\server-8000.txt`
+  - `C:\ProgramData\ngrok\ngrok-8000.txt`
 
-## Important Result
+Important:
+- All task create/update commands must be run in elevated PowerShell (Run as Administrator).
+- ngrok auth token is user-scoped unless explicitly configured otherwise.
 
-ngrok does not expose the whole GitHub repo. It only tunnels the local server listening on port `8000`, and that server only serves the target folder above.
+## Daily Operations (No Manual Foreground Commands)
 
-## Prerequisites
-
-- PowerShell running as Administrator for the scheduled task setup
-- Python available on PATH or through the Python launcher (`py`)
-- ngrok installed and authenticated
-
-## One-Time Setup
-
-### 1. Verify ngrok is installed
-
-```powershell
-ngrok version
-```
-
-Verify:
-- You should see a version number
-
-Troubleshoot:
-- If PowerShell says ngrok is not recognized, reopen the terminal or add `C:\ProgramData\chocolatey\bin` to PATH.
-
-### 2. Add or replace the ngrok auth token
-
-```powershell
-ngrok config add-authtoken YOUR_NEW_AUTHTOKEN
-```
-
-Verify:
-- Run `ngrok http 8000`
-- If ngrok starts without `ERR_NGROK_4018`, the token is working
-
-Troubleshoot:
-- If the token was already set under another account, the scheduled task may fail unless it runs under the same account context.
-- If you pasted a real token before, rotate it in the ngrok dashboard.
-
-### 3. Test the folder manually with Python
-
-```powershell
-cd "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok_tunneling_this_has_port_to_INTERNET"
-py -3 -m http.server 8000
-```
-
-Verify:
-- Open `http://127.0.0.1:8000`
-- You should see only that folder's contents
-
-Troubleshoot:
-- If port `8000` is in use, choose another port and update the commands below.
-- If `py -3` fails, try `python -m http.server 8000`.
-
-Stop the server with `Ctrl+C` after testing.
-
-### 4. Create log folders
-
-```powershell
-New-Item -ItemType Directory -Path "C:\ProgramData\localserver" -Force
-New-Item -ItemType Directory -Path "C:\ProgramData\ngrok" -Force
-```
-
-Verify:
-- The folders should exist after the command runs
-
-Troubleshoot:
-- If a folder cannot be created, make sure PowerShell is running as Administrator.
-
-## Sticky Local Server Task
-
-This task starts the Python server automatically after reboot.
-
-### 5. Create the local server scheduled task
-
-```powershell
-$ErrorActionPreference = "Stop"
-
-$serveDir = "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok_tunneling_this_has_port_to_INTERNET"
-$port = 8000
-$taskName = "LocalStaticServer-8000"
-$logDir = "C:\ProgramData\localserver"
-$logFile = Join-Path $logDir "server-8000.txt"
-
-$arg = "-NoProfile -WindowStyle Hidden -Command `"py -3 -m http.server $port --directory `"$serveDir`" *>> `"$logFile`"`""
-$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $arg
-$trigger = New-ScheduledTaskTrigger -AtStartup
-$principal = New-ScheduledTaskPrincipal -UserId "$env:USERNAME" -LogonType Interactive -RunLevel Highest
-
-Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Force
-```
-
-Verify:
-- The task should register without errors
-
-Troubleshoot:
-- If the command fails, verify the folder path is correct and the `py` launcher exists.
-- If the scheduled task starts but the server does not respond, inspect the log file below.
-
-### 6. Start the local server now
+### Start both sticky services
 
 ```powershell
 Start-ScheduledTask -TaskName "LocalStaticServer-8000"
+Start-ScheduledTask -TaskName "Ngrok-8000"
 ```
 
-Verify:
-- The task should show as running or ready
-- Visit `http://127.0.0.1:8000`
+### Stop both sticky services
 
-Troubleshoot:
-- If the page does not load, check the log file.
+```powershell
+Stop-ScheduledTask -TaskName "Ngrok-8000"
+Stop-ScheduledTask -TaskName "LocalStaticServer-8000"
+```
 
-### 7. Check local server status and logs
+### Restart both sticky services
+
+```powershell
+Stop-ScheduledTask -TaskName "Ngrok-8000"
+Stop-ScheduledTask -TaskName "LocalStaticServer-8000"
+Start-ScheduledTask -TaskName "LocalStaticServer-8000"
+Start-ScheduledTask -TaskName "Ngrok-8000"
+```
+
+## Health Checks
+
+### Check task status
 
 ```powershell
 Get-ScheduledTask -TaskName "LocalStaticServer-8000" | Get-ScheduledTaskInfo
+Get-ScheduledTask -TaskName "Ngrok-8000" | Get-ScheduledTaskInfo
+```
+
+Interpretation:
+- `LastTaskResult = 0` is success
+- `LastTaskResult = 1` generally means command/runtime failure (check logs)
+- `TaskName not found` means task was deleted or never registered
+
+### Check local server responds
+
+```powershell
+Invoke-WebRequest http://127.0.0.1:8000
+```
+
+If this fails, ngrok cannot serve your content correctly.
+
+## Logs
+
+### Last 50 lines
+
+```powershell
 Get-Content C:\ProgramData\localserver\server-8000.txt -Tail 50
+Get-Content C:\ProgramData\ngrok\ngrok-8000.txt -Tail 50
+```
+
+### Live tail
+
+```powershell
 Get-Content C:\ProgramData\localserver\server-8000.txt -Tail 50 -Wait
+Get-Content C:\ProgramData\ngrok\ngrok-8000.txt -Tail 50 -Wait
 ```
 
-Verify:
-- Task status should show it is running or ready
-- The log should mention the port and serving directory
+Tip: open two PowerShell windows to watch both logs at the same time.
 
-Troubleshoot:
-- If the log is empty, the task may not have started
-- If the port is already in use, choose a new port and update the task
+## Common Errors and What They Mean
 
-### 8. Stop or remove the local server task
+### `ERR_NGROK_4018`
 
+Meaning:
+- ngrok auth token is missing for the account context running the task
+
+Fix:
 ```powershell
-Stop-ScheduledTask -TaskName "LocalStaticServer-8000"
-Unregister-ScheduledTask -TaskName "LocalStaticServer-8000" -Confirm:$false
+ngrok config add-authtoken YOUR_NEW_AUTHTOKEN
+Stop-ScheduledTask -TaskName "Ngrok-8000"
+Start-ScheduledTask -TaskName "Ngrok-8000"
 ```
 
-## Sticky ngrok Task
+Concrete steps:
+1. Run `ngrok config add-authtoken YOUR_NEW_AUTHTOKEN` in your normal user PowerShell session.
+2. Restart only the ngrok task.
+3. Check `Get-Content C:\ProgramData\ngrok\ngrok-8000.txt -Tail 50`.
+4. Confirm the error is gone and a tunnel session appears.
 
-This task starts ngrok automatically after reboot and tunnels the local server.
+### `Start-ScheduledTask ... cannot find the file specified`
 
-### 9. Create the ngrok scheduled task
+Meaning:
+- Task does not exist, or action path/arguments are broken
+
+Fix:
+- Recreate that task in elevated PowerShell
+
+Concrete steps:
+1. Check task existence:
+  `Get-ScheduledTask -TaskName "Ngrok-8000"`
+2. If not found, recreate the task from your saved task command block.
+3. Start it again:
+  `Start-ScheduledTask -TaskName "Ngrok-8000"`
+4. Check status:
+  `Get-ScheduledTask -TaskName "Ngrok-8000" | Get-ScheduledTaskInfo`
+
+### `Access is denied` on `Register-ScheduledTask`
+
+Meaning:
+- Not running elevated PowerShell
+
+Fix:
+- Reopen PowerShell as Administrator and rerun task creation
+
+Concrete steps:
+1. Close current terminal.
+2. Open PowerShell with Run as Administrator.
+3. Re-run task registration command.
+4. Verify task exists with `Get-ScheduledTask -TaskName "Ngrok-8000"`.
+
+### Python log shows `WinError 10054`
+
+Meaning:
+- Client disconnected mid-request (usually harmless)
+
+Fix:
+- None, unless requests are consistently failing
+
+Concrete steps:
+1. Confirm local server still responds:
+  `Invoke-WebRequest http://127.0.0.1:8000`
+2. If it responds, ignore this message.
+3. If it does not respond, restart local server task and recheck logs.
+
+## Concrete Troubleshooting Flows
+
+### Flow A: Both services look down
 
 ```powershell
-$ErrorActionPreference = "Stop"
+Get-ScheduledTask -TaskName "LocalStaticServer-8000" | Get-ScheduledTaskInfo
+Get-ScheduledTask -TaskName "Ngrok-8000" | Get-ScheduledTaskInfo
+Start-ScheduledTask -TaskName "LocalStaticServer-8000"
+Start-ScheduledTask -TaskName "Ngrok-8000"
+Get-Content C:\ProgramData\localserver\server-8000.txt -Tail 50
+Get-Content C:\ProgramData\ngrok\ngrok-8000.txt -Tail 50
+```
 
-$ngrok = (Get-Command ngrok).Source
-$logDir = "C:\ProgramData\ngrok"
-$logFile = Join-Path $logDir "ngrok-8000.txt"
-$taskName = "Ngrok-8000"
+Expected:
+- Local log shows incoming requests
+- ngrok log shows active session, no auth errors
 
-New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+### Flow B: Local works, public URL fails
 
-$arg = "-NoProfile -WindowStyle Hidden -Command `"& '$ngrok' http 8000 --log stdout *>> '$logFile'`""
+```powershell
+Invoke-WebRequest http://127.0.0.1:8000
+Get-Content C:\ProgramData\ngrok\ngrok-8000.txt -Tail 50
+```
+
+If local works and ngrok log has auth errors, rotate/reapply token and restart ngrok task.
+
+### Flow C: Task exists but fails immediately
+
+```powershell
+Get-ScheduledTask -TaskName "Ngrok-8000" | Get-ScheduledTaskInfo
+Get-ScheduledTask -TaskName "Ngrok-8000" | Select-Object -ExpandProperty Actions | Format-List *
+Get-Content C:\ProgramData\ngrok\ngrok-8000.txt -Tail 50
+```
+
+Check for:
+- Wrong executable path
+- Broken arguments
+- Missing token
+
+## Change Auth Token
+
+```powershell
+ngrok config add-authtoken YOUR_NEW_AUTHTOKEN
+Stop-ScheduledTask -TaskName "Ngrok-8000"
+Start-ScheduledTask -TaskName "Ngrok-8000"
+Get-Content C:\ProgramData\ngrok\ngrok-8000.txt -Tail 50
+```
+
+## Change Served Folder (Keep Port 8000)
+
+Use this when you want local server to expose a different folder.
+
+```powershell
+$newDir = "C:\path\to\new\folder"
+$taskName = "LocalStaticServer-8000"
+$arg = "-NoProfile -WindowStyle Hidden -Command `"py -3 -m http.server 8000 --directory `"$newDir`" *>> `"C:\ProgramData\localserver\server-8000.txt`"`""
 $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $arg
 $trigger = New-ScheduledTaskTrigger -AtStartup
 $principal = New-ScheduledTaskPrincipal -UserId "$env:USERNAME" -LogonType Interactive -RunLevel Highest
 
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Force
+Stop-ScheduledTask -TaskName $taskName
+Start-ScheduledTask -TaskName $taskName
 ```
 
 Verify:
-- The task should register without errors
-
-Troubleshoot:
-- If ngrok auth fails under `SYSTEM`, use your user account instead so it can read the token from the same profile.
-
-### 10. Start ngrok now
-
 ```powershell
-Start-ScheduledTask -TaskName "Ngrok-8000"
+Invoke-WebRequest http://127.0.0.1:8000
+Get-Content C:\ProgramData\localserver\server-8000.txt -Tail 50
 ```
 
-Verify:
-- `ngrok version` should still work
-- `ngrok http 8000` should create a tunnel if the local server is running
+## Change Port (Local + ngrok)
 
-Troubleshoot:
-- If `ngrok http 8000` fails with `ERR_NGROK_4018`, the auth token is missing or tied to a different account context
-- If the local server is not running yet, ngrok may start but the tunnel will not serve your folder content correctly
+If you move from `8000` to another port, both tasks must match.
 
-### 11. Check ngrok status and logs
+Example with `9000`:
 
 ```powershell
-Get-ScheduledTask -TaskName "Ngrok-8000" | Get-ScheduledTaskInfo
-Get-Content C:\ProgramData\ngrok\ngrok-8000.txt -Tail 50
-Get-Content C:\ProgramData\ngrok\ngrok-8000.txt -Tail 50 -Wait
+$port = 9000
+
+# Update local server task
+$serveDir = "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok_tunneling_this_has_port_to_INTERNET"
+$localArg = "-NoProfile -WindowStyle Hidden -Command `"py -3 -m http.server $port --directory `"$serveDir`" *>> `"C:\ProgramData\localserver\server-$port.txt`"`""
+$localAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $localArg
+$trigger = New-ScheduledTaskTrigger -AtStartup
+$principal = New-ScheduledTaskPrincipal -UserId "$env:USERNAME" -LogonType Interactive -RunLevel Highest
+Register-ScheduledTask -TaskName "LocalStaticServer-$port" -Action $localAction -Trigger $trigger -Principal $principal -Force
+
+# Update ngrok task
+$ngrokArg = "-NoProfile -WindowStyle Hidden -Command `"& 'C:\ProgramData\chocolatey\bin\ngrok.exe' http $port --log stdout *>> 'C:\ProgramData\ngrok\ngrok-$port.txt'`""
+$ngrokAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $ngrokArg
+Register-ScheduledTask -TaskName "Ngrok-$port" -Action $ngrokAction -Trigger $trigger -Principal $principal -Force
+
+Start-ScheduledTask -TaskName "LocalStaticServer-$port"
+Start-ScheduledTask -TaskName "Ngrok-$port"
 ```
 
-Verify:
-- Task status should be running or ready
-- The log should show the tunnel URL and session messages
+## Quick Troubleshooting Bundle
 
-Troubleshoot:
-- If the log shows authentication failure, rerun `ngrok config add-authtoken YOUR_NEW_AUTHTOKEN`
-- If the log shows the tunnel opening but the browser returns an error, confirm the local server is still running on port `8000`
-
-### 12. Stop or remove the ngrok task
-
-```powershell
-Stop-ScheduledTask -TaskName "Ngrok-8000"
-Unregister-ScheduledTask -TaskName "Ngrok-8000" -Confirm:$false
-```
-
-## Daily Use
-
-Use these commands when you want to work with the services manually.
-
-### Start both services manually
-
-```powershell
-cd "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok_tunneling_this_has_port_to_INTERNET"
-py -3 -m http.server 8000
-```
-
-In a second PowerShell window:
-
-```powershell
-ngrok http 8000
-```
-
-Verify:
-- `http://127.0.0.1:8000` should show the local folder
-- ngrok should print a public forwarding URL
-
-Troubleshoot:
-- If ngrok fails, check the ngrok log and confirm the token
-- If the browser does not load locally, confirm the Python server is running
-
-### Check whether both are running
+Run this block first when something is wrong:
 
 ```powershell
 Get-ScheduledTask -TaskName "LocalStaticServer-8000" | Get-ScheduledTaskInfo
 Get-ScheduledTask -TaskName "Ngrok-8000" | Get-ScheduledTaskInfo
-```
-
-### View the last 50 log lines
-
-```powershell
+Invoke-WebRequest http://127.0.0.1:8000
 Get-Content C:\ProgramData\localserver\server-8000.txt -Tail 50
 Get-Content C:\ProgramData\ngrok\ngrok-8000.txt -Tail 50
 ```
 
-### Watch logs live
-
-```powershell
-Get-Content C:\ProgramData\localserver\server-8000.txt -Tail 50 -Wait
-Get-Content C:\ProgramData\ngrok\ngrok-8000.txt -Tail 50 -Wait
-```
-
-Open separate PowerShell windows if you want to watch both logs at the same time.
-
-## Change Auth Token
-
-Use this when you want to replace the ngrok token.
-
-### 1. Get a new token
-
-https://dashboard.ngrok.com/get-started/your-authtoken
-
-### 2. Add the new token
-
-```powershell
-ngrok config add-authtoken YOUR_NEW_AUTHTOKEN
-```
-
-Verify:
-- Run `ngrok http 8000`
-- If it starts without auth errors, the new token is working
-
-Troubleshoot:
-- If the scheduled task still fails, stop and start it again so it reloads the token
-
-## Common Troubleshooting
-
-### ngrok says command not found
-
-```powershell
-where.exe ngrok
-```
-
-If nothing is returned, reopen PowerShell or add `C:\ProgramData\chocolatey\bin` to PATH.
-
-### Python server does not start
-
-```powershell
-py -3 --version
-python --version
-```
-
-If both fail, Python is not installed or is not on PATH.
-
-### ngrok authentication fails
-
-```powershell
-Get-Content C:\ProgramData\ngrok\ngrok-8000.txt -Tail 100
-```
-
-If you see `ERR_NGROK_4018`, re-add the authtoken using the same account that runs the task.
-
-### Port 8000 is already in use
-
-```powershell
-netstat -ano | findstr :8000
-```
-
-If another process is using the port, stop it or change the server port and update the task and ngrok command.
-
-## Summary
-
-- Python serves one folder on port `8000`
-- ngrok tunnels that local port
-- Both can start automatically at boot through scheduled tasks
-- Logs are stored in `C:\ProgramData\localserver` and `C:\ProgramData\ngrok`
-- Use the verification commands after each step to confirm the setup is working
+Expected outcome:
+- Local server task healthy
+- ngrok task healthy
+- localhost reachable
+- logs show normal activity and no auth errors
