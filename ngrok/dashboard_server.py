@@ -1,5 +1,7 @@
 import argparse
+import base64
 import json
+import logging
 import os
 import re
 import subprocess
@@ -12,12 +14,30 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 BASE_DIR = Path(__file__).resolve().parent
-LOCAL_LOG = Path(r"C:\ProgramData\localserver\server-8000.txt")
-NGROK_LOG = Path(r"C:\ProgramData\ngrok\ngrok-8000.txt")
-TASK_NAMES = ["LocalStaticServer-8000", "Ngrok-8000"]
+LOCAL_LOG = Path(os.environ.get("DASHBOARD_LOCAL_LOG", r"C:\ProgramData\localserver\server-8000.txt"))
+NGROK_LOG = Path(os.environ.get("DASHBOARD_NGROK_LOG", r"C:\ProgramData\ngrok\ngrok-8000.txt"))
+TASK_NAMES = [
+    os.environ.get("DASHBOARD_TASK_NAME_LOCAL", "LocalStaticServer-8000"),
+    os.environ.get("DASHBOARD_TASK_NAME_NGROK", "Ngrok-8000"),
+]
+SERVER_LOG = Path(os.environ.get("DASHBOARD_SERVER_LOG", str(BASE_DIR / "dashboard_server.log")))
+AUTH_TOKEN = os.environ.get("DASHBOARD_AUTH_TOKEN") or None
+AUTH_USER = os.environ.get("DASHBOARD_AUTH_USER") or None
+AUTH_PASSWORD = os.environ.get("DASHBOARD_AUTH_PASSWORD") or None
+ALLOWLIST = tuple(filter(None, (item.strip() for item in os.environ.get("DASHBOARD_ALLOWLIST", "").split(","))))
+DEBUG_TASK_OUTPUT = os.environ.get("DASHBOARD_DEBUG_TASK_OUTPUT", "").strip().lower() in {"1", "true", "yes", "on"}
+TASK_STATUS_TTL_SECONDS = 10.0
+STATS_CACHE_TTL_SECONDS = 3.0
+MAX_TAIL_LINES = 500
+MAX_TOP_RESULTS = 100
 WATCH_LOCK = threading.Lock()
 WATCH_CONDITION = threading.Condition(WATCH_LOCK)
 WATCH_STATE = {"seq": 0, "snapshot": None}
+CACHE_LOCK = threading.Lock()
+TASK_STATUS_CACHE = {"ts": 0.0, "payload": None}
+STATS_CACHE = {}
+PARSE_ERROR_LOGGED = {}
+LOG = logging.getLogger("dashboard_server")
 
 ACCESS_RE = re.compile(
     r"^(?P<ip>\S+)\s+-\s+-\s+\[(?P<dt>[^\]]+)\]\s+\"(?P<method>[A-Z]+)\s+(?P<path>\S+)\s+HTTP/\d(?:\.\d)?\"\s+(?P<status>\d{3})\s+"
@@ -40,6 +60,140 @@ STATUS_EXPLANATIONS = {
     "503": "Service Unavailable - service temporarily unavailable.",
     "504": "Gateway Timeout - upstream timed out.",
 }
+
+ALLOWED_IP_SORTS = {"ip", "requests", "sites"}
+ALLOWED_IP_ORDERS = {"asc", "desc"}
+ALLOWED_ACTIONS = {"start-all", "stop-all", "restart-all"}
+DENIED_SUFFIXES = {".py", ".ps1", ".psm1", ".bat", ".cmd", ".exe", ".dll", ".sh", ".env", ".log"}
+
+
+def configure_logging(log_file: Path):
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    LOG.handlers.clear()
+    LOG.setLevel(logging.INFO)
+    file_handler = logging.FileHandler(log_file, encoding="utf-8")
+    stream_handler = logging.StreamHandler()
+    formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+    file_handler.setFormatter(formatter)
+    stream_handler.setFormatter(formatter)
+    LOG.addHandler(file_handler)
+    LOG.addHandler(stream_handler)
+
+
+def log_rate_limited(key: str, message: str, level: int = logging.WARNING, interval_seconds: float = 30.0):
+    now = time.monotonic()
+    with CACHE_LOCK:
+        last_logged = PARSE_ERROR_LOGGED.get(key, 0.0)
+        if now - last_logged < interval_seconds:
+            return
+        PARSE_ERROR_LOGGED[key] = now
+    LOG.log(level, message)
+
+
+def clamp_int(value, default: int, minimum: int, maximum: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(minimum, min(maximum, parsed))
+
+
+def normalize_choice(value, allowed, default):
+    if value is None:
+        return default
+    normalized = str(value).strip().lower()
+    return normalized if normalized in allowed else default
+
+
+def parse_basic_auth(header_value: str | None):
+    if not header_value or not header_value.startswith("Basic "):
+        return None, None
+    token = header_value.split(" ", 1)[1].strip()
+    try:
+        decoded = base64.b64decode(token).decode("utf-8")
+    except (ValueError, UnicodeDecodeError):
+        return None, None
+    if ":" not in decoded:
+        return None, None
+    username, password = decoded.split(":", 1)
+    return username, password
+
+
+def is_authorized(request_handler: BaseHTTPRequestHandler) -> bool:
+    if not any([AUTH_TOKEN, AUTH_USER, AUTH_PASSWORD]):
+        return True
+
+    remote_ip = request_handler.client_address[0] if request_handler.client_address else None
+    if ALLOWLIST and remote_ip not in ALLOWLIST:
+        return False
+
+    authorization = request_handler.headers.get("Authorization")
+    token_header = request_handler.headers.get("X-Dashboard-Token")
+    if AUTH_TOKEN and token_header == AUTH_TOKEN:
+        return True
+
+    if AUTH_USER is not None and AUTH_PASSWORD is not None:
+        username, password = parse_basic_auth(authorization)
+        if username == AUTH_USER and password == AUTH_PASSWORD:
+            return True
+
+    return False
+
+
+def cache_lookup(cache_key: str, ttl_seconds: float):
+    with CACHE_LOCK:
+        entry = STATS_CACHE.get(cache_key)
+        if not entry:
+            return None
+        if time.monotonic() - entry["ts"] > ttl_seconds:
+            STATS_CACHE.pop(cache_key, None)
+            return None
+        return entry["payload"]
+
+
+def cache_store(cache_key: str, payload):
+    with CACHE_LOCK:
+        STATS_CACHE[cache_key] = {"ts": time.monotonic(), "payload": payload}
+
+
+def parse_requested_int(query, name: str, default: int, minimum: int, maximum: int):
+    raw_value = query.get(name, [None])[0]
+    if raw_value in (None, ""):
+        return default
+    try:
+        parsed = int(raw_value)
+    except ValueError as exc:
+        raise ValueError(f"Invalid {name}: expected an integer") from exc
+    if parsed < minimum or parsed > maximum:
+        raise ValueError(f"Invalid {name}: must be between {minimum} and {maximum}")
+    return parsed
+
+
+def parse_requested_choice(query, name: str, allowed, default: str):
+    raw_value = query.get(name, [None])[0]
+    if raw_value in (None, ""):
+        return default
+    normalized = str(raw_value).strip().lower()
+    if normalized not in allowed:
+        raise ValueError(f"Invalid {name}: expected one of {', '.join(sorted(allowed))}")
+    return normalized
+
+
+def get_task_names():
+    return TASK_NAMES[:2]
+
+
+def get_watch_state_snapshot():
+    with WATCH_CONDITION:
+        return WATCH_STATE["seq"], WATCH_STATE["snapshot"]
+
+
+def set_watch_state_snapshot(snapshot):
+    with WATCH_CONDITION:
+        WATCH_STATE["seq"] += 1
+        WATCH_STATE["snapshot"] = snapshot
+        WATCH_CONDITION.notify_all()
+        return WATCH_STATE["seq"]
 
 
 def run_powershell(command: str, timeout: int = 20) -> subprocess.CompletedProcess:
@@ -76,33 +230,46 @@ def detect_text_encoding(path: Path) -> str:
 
 
 def get_task_status():
-    script = r'''
-$tasks = "LocalStaticServer-8000","Ngrok-8000"
+    now = time.monotonic()
+    with CACHE_LOCK:
+        cached = TASK_STATUS_CACHE["payload"]
+        if cached is not None and now - TASK_STATUS_CACHE["ts"] < TASK_STATUS_TTL_SECONDS:
+            return cached
+
+    task_1, task_2 = get_task_names()
+    script = rf'''
+$tasks = "{task_1}","{task_2}"
 $result = @()
-foreach($name in $tasks){
-  try {
-    $t = Get-ScheduledTask -TaskName $name -ErrorAction Stop
-    $i = $t | Get-ScheduledTaskInfo
-    $result += [pscustomobject]@{
-      TaskName = $name
-      State = [string]$t.State
-      LastRunTime = $i.LastRunTime
-      LastTaskResult = $i.LastTaskResult
-      NextRunTime = $i.NextRunTime
-    }
-  }
-  catch {
-    $result += [pscustomobject]@{
-      TaskName = $name
-      Error = $_.Exception.Message
-    }
-  }
-}
+foreach($name in $tasks){{
+    try {{
+        $t = Get-ScheduledTask -TaskName $name -ErrorAction Stop
+        $i = $t | Get-ScheduledTaskInfo
+        $result += [pscustomobject]@{{
+            TaskName = $name
+            State = [string]$t.State
+            LastRunTime = $i.LastRunTime
+            LastTaskResult = $i.LastTaskResult
+            NextRunTime = $i.NextRunTime
+        }}
+    }}
+    catch {{
+        $result += [pscustomobject]@{{
+            TaskName = $name
+            Error = $_.Exception.Message
+        }}
+    }}
+}}
 $result | ConvertTo-Json -Depth 4
 '''
     proc = run_powershell(script)
     if proc.returncode != 0:
-        return {"ok": False, "error": proc.stderr.strip() or proc.stdout.strip()}
+        error_text = proc.stderr.strip() or proc.stdout.strip() or "Task status check failed"
+        LOG.warning("task status failed: %s", error_text)
+        payload = {"ok": False, "error": error_text}
+        with CACHE_LOCK:
+            TASK_STATUS_CACHE["ts"] = time.monotonic()
+            TASK_STATUS_CACHE["payload"] = payload
+        return payload
 
     payload = proc.stdout.strip()
     if not payload:
@@ -111,15 +278,26 @@ $result | ConvertTo-Json -Depth 4
     try:
         data = json.loads(payload)
     except json.JSONDecodeError:
-        return {"ok": False, "error": f"Failed to parse task JSON: {payload}"}
+        error_text = f"Failed to parse task JSON: {payload}"
+        log_rate_limited("task-status-json", error_text)
+        result = {"ok": False, "error": error_text}
+        with CACHE_LOCK:
+            TASK_STATUS_CACHE["ts"] = time.monotonic()
+            TASK_STATUS_CACHE["payload"] = result
+        return result
 
     if isinstance(data, dict):
         data = [data]
 
-    return {"ok": True, "tasks": data}
+    result = {"ok": True, "tasks": data}
+    with CACHE_LOCK:
+        TASK_STATUS_CACHE["ts"] = time.monotonic()
+        TASK_STATUS_CACHE["payload"] = result
+    return result
 
 
 def read_tail(path: Path, lines: int = 80):
+    lines = max(1, min(MAX_TAIL_LINES, lines))
     if not path.exists():
         return [f"[missing] {path}"]
 
@@ -158,6 +336,10 @@ def parse_access_stats(
     recent = deque(maxlen=25)
     total = 0
 
+    top = clamp_int(top, 20, 1, MAX_TOP_RESULTS)
+    ip_sort = normalize_choice(ip_sort, ALLOWED_IP_SORTS, "requests")
+    ip_order = normalize_choice(ip_order, ALLOWED_IP_ORDERS, "desc")
+
     if not path.exists():
         return {
             "total_requests": 0,
@@ -169,47 +351,58 @@ def parse_access_stats(
         }
 
     encoding = detect_text_encoding(path)
-    with path.open("r", encoding=encoding, errors="replace") as f:
-        for line in f:
-            m = ACCESS_RE.match(line)
-            if not m:
-                continue
+    try:
+        with path.open("r", encoding=encoding, errors="replace") as f:
+            for line in f:
+                m = ACCESS_RE.match(line)
+                if not m:
+                    continue
 
-            req_path = m.group("path").split("?", 1)[0] or "/"
-            ip = m.group("ip")
-            status = m.group("status")
+                req_path = m.group("path").split("?", 1)[0] or "/"
+                ip = m.group("ip")
+                status = m.group("status")
 
-            if ip_filter and ip != ip_filter:
-                continue
-            if site_filter and req_path != site_filter:
-                continue
-            if status_filter and status != status_filter:
-                continue
+                if ip_filter and ip != ip_filter:
+                    continue
+                if site_filter and req_path != site_filter:
+                    continue
+                if status_filter and status != status_filter:
+                    continue
 
-            total += 1
-            method = m.group("method")
-            files[req_path] += 1
-            statuses[status] += 1
-            methods[method] += 1
-            families[f"{status[0]}xx"] += 1
-            ips[ip] += 1
-            if ip not in ip_sites:
-                ip_sites[ip] = set()
-            ip_sites[ip].add(req_path)
+                total += 1
+                method = m.group("method")
+                files[req_path] += 1
+                statuses[status] += 1
+                methods[method] += 1
+                families[f"{status[0]}xx"] += 1
+                ips[ip] += 1
+                if ip not in ip_sites:
+                    ip_sites[ip] = set()
+                ip_sites[ip].add(req_path)
 
-            recent.appendleft({
-                "ip": m.group("ip"),
-                "dt": m.group("dt"),
-                "method": method,
-                "path": req_path,
-                "status": status,
-            })
+                recent.appendleft({
+                    "ip": m.group("ip"),
+                    "dt": m.group("dt"),
+                    "method": method,
+                    "path": req_path,
+                    "status": status,
+                })
 
-            dt_text = m.group("dt")
-            hour_match = re.match(r"^(\d{2})/([A-Za-z]{3})/(\d{4})\s+(\d{2})", dt_text)
-            if hour_match:
-                day, mon, year, hour = hour_match.groups()
-                hourly[f"{year}-{mon}-{day} {hour}:00"] += 1
+                dt_text = m.group("dt")
+                hour_match = re.match(r"^(\d{2})/([A-Za-z]{3})/(\d{4})\s+(\d{2})", dt_text)
+                if hour_match:
+                    day, mon, year, hour = hour_match.groups()
+                    hourly[f"{year}-{mon}-{day} {hour}:00"] += 1
+    except OSError as exc:
+        log_rate_limited(f"stats-read-{path}", f"failed to read access log {path}: {exc}")
+        return {
+            "total_requests": 0,
+            "unique_files": 0,
+            "top_files": [],
+            "status_codes": [],
+            "top_ips": [],
+            "hourly": [],
+        }
 
     ip_records = [
         {
@@ -242,6 +435,46 @@ def parse_access_stats(
         "hourly": [{"label": k, "value": v} for k, v in sorted(hourly.items())],
         "recent_requests": list(recent),
     }
+
+
+def get_access_stats_cached(
+    path: Path,
+    top: int = 20,
+    ip_sort: str = "requests",
+    ip_order: str = "desc",
+    ip_filter: str | None = None,
+    site_filter: str | None = None,
+    status_filter: str | None = None,
+):
+    file_state = get_file_signature(path)
+    cache_key = json.dumps(
+        {
+            "path": str(path),
+            "file_state": file_state,
+            "top": clamp_int(top, 20, 1, MAX_TOP_RESULTS),
+            "ip_sort": normalize_choice(ip_sort, ALLOWED_IP_SORTS, "requests"),
+            "ip_order": normalize_choice(ip_order, ALLOWED_IP_ORDERS, "desc"),
+            "ip_filter": ip_filter,
+            "site_filter": site_filter,
+            "status_filter": status_filter,
+        },
+        sort_keys=True,
+    )
+    cached = cache_lookup(cache_key, STATS_CACHE_TTL_SECONDS)
+    if cached is not None:
+        return cached
+
+    payload = parse_access_stats(
+        path,
+        top=top,
+        ip_sort=ip_sort,
+        ip_order=ip_order,
+        ip_filter=ip_filter,
+        site_filter=site_filter,
+        status_filter=status_filter,
+    )
+    cache_store(cache_key, payload)
+    return payload
 
 
 def parse_dimensions(path: Path):
@@ -279,25 +512,39 @@ def parse_dimensions(path: Path):
 
 
 def run_task_action(action: str):
+    if action not in ALLOWED_ACTIONS:
+        return {"ok": False, "error": "Unknown action"}
+
+    task_1, task_2 = get_task_names()
     if action == "start-all":
-        script = "Start-ScheduledTask -TaskName 'LocalStaticServer-8000'; Start-ScheduledTask -TaskName 'Ngrok-8000'"
+        script = f"Start-ScheduledTask -TaskName '{task_1}'; Start-ScheduledTask -TaskName '{task_2}'"
     elif action == "stop-all":
-        script = "Stop-ScheduledTask -TaskName 'Ngrok-8000'; Stop-ScheduledTask -TaskName 'LocalStaticServer-8000'"
+        script = f"Stop-ScheduledTask -TaskName '{task_2}'; Stop-ScheduledTask -TaskName '{task_1}'"
     elif action == "restart-all":
         script = (
-            "Stop-ScheduledTask -TaskName 'Ngrok-8000'; "
-            "Stop-ScheduledTask -TaskName 'LocalStaticServer-8000'; "
-            "Start-ScheduledTask -TaskName 'LocalStaticServer-8000'; "
-            "Start-ScheduledTask -TaskName 'Ngrok-8000'"
+            f"Stop-ScheduledTask -TaskName '{task_2}'; "
+            f"Stop-ScheduledTask -TaskName '{task_1}'; "
+            f"Start-ScheduledTask -TaskName '{task_1}'; "
+            f"Start-ScheduledTask -TaskName '{task_2}'"
         )
     else:
         return {"ok": False, "error": "Unknown action"}
 
     proc = run_powershell(script)
     if proc.returncode != 0:
-        return {"ok": False, "error": proc.stderr.strip() or proc.stdout.strip()}
+        error_text = proc.stderr.strip() or proc.stdout.strip() or "Task action failed"
+        LOG.warning("task action %s failed: %s", action, error_text)
+        result = {"ok": False, "error": error_text}
+        if DEBUG_TASK_OUTPUT:
+            result["stdout"] = proc.stdout.strip()
+            result["stderr"] = proc.stderr.strip()
+        return result
 
-    return {"ok": True}
+    result = {"ok": True}
+    if DEBUG_TASK_OUTPUT:
+        result["stdout"] = proc.stdout.strip()
+        result["stderr"] = proc.stderr.strip()
+    return result
 
 
 def get_file_signature(path: Path):
@@ -330,12 +577,9 @@ def watch_for_changes(interval_seconds: int = 2):
         snapshot = build_watch_snapshot()
         signature = snapshot_signature(snapshot)
 
-        with WATCH_CONDITION:
-            if signature != last_signature:
-                WATCH_STATE["seq"] += 1
-                WATCH_STATE["snapshot"] = snapshot
-                WATCH_CONDITION.notify_all()
-                last_signature = signature
+        if signature != last_signature:
+            set_watch_state_snapshot(snapshot)
+            last_signature = signature
 
         time.sleep(interval_seconds)
 
@@ -343,6 +587,12 @@ def watch_for_changes(interval_seconds: int = 2):
 class DashboardHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         return
+
+    def _json_error(self, status: int, message: str, **extra):
+        payload = {"ok": False, "error": message}
+        if extra:
+            payload.update(extra)
+        self._json(status, payload)
 
     def _json(self, status: int, payload):
         data = json.dumps(payload).encode("utf-8")
@@ -353,6 +603,25 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
+
+    def _require_auth(self):
+        if is_authorized(self):
+            return True
+
+        if AUTH_USER is not None and AUTH_PASSWORD is not None and not AUTH_TOKEN:
+            self.send_response(401)
+            self.send_header("WWW-Authenticate", 'Basic realm="Dashboard"')
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+            self.send_header("Pragma", "no-cache")
+            body = json.dumps({"ok": False, "error": "Unauthorized"}).encode("utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return False
+
+        self._json_error(403, "Unauthorized")
+        return False
 
     def _text(self, status: int, payload: str):
         data = payload.encode("utf-8")
@@ -367,6 +636,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def _serve_file(self, rel_path: str):
         file_path = (BASE_DIR / rel_path).resolve()
         if not str(file_path).startswith(str(BASE_DIR)) or not file_path.exists():
+            self._text(404, "Not found")
+            return
+
+        if any(part.startswith(".") for part in file_path.relative_to(BASE_DIR).parts):
+            self._text(404, "Not found")
+            return
+
+        if file_path.suffix.lower() in DENIED_SUFFIXES:
             self._text(404, "Not found")
             return
 
@@ -393,6 +670,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
+        if not self._require_auth():
+            return
+
         parsed = urlparse(self.path)
         route = parsed.path
         query = parse_qs(parsed.query)
@@ -416,33 +696,48 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         if route == "/api/status":
             status = get_task_status()
-            self._json(200, status)
+            self._json(200 if status.get("ok") else 503, status)
             return
 
         if route == "/api/log/local":
-            lines = int(query.get("tail", [80])[0])
+            try:
+                lines = parse_requested_int(query, "tail", 80, 1, MAX_TAIL_LINES)
+            except ValueError as exc:
+                LOG.warning("invalid local tail query: %s", exc)
+                self._json_error(400, str(exc))
+                return
             payload = "".join(read_tail(LOCAL_LOG, lines=lines))
             self._text(200, payload)
             return
 
         if route == "/api/log/ngrok":
-            lines = int(query.get("tail", [80])[0])
+            try:
+                lines = parse_requested_int(query, "tail", 80, 1, MAX_TAIL_LINES)
+            except ValueError as exc:
+                LOG.warning("invalid ngrok tail query: %s", exc)
+                self._json_error(400, str(exc))
+                return
             payload = "".join(read_tail(NGROK_LOG, lines=lines))
             self._text(200, payload)
             return
 
         if route == "/api/stats":
-            top = int(query.get("top", [20])[0])
-            ip_sort = query.get("ip_sort", ["requests"])[0].lower()
-            ip_order = query.get("ip_order", ["desc"])[0].lower()
-            ip_filter = query.get("ip", [None])[0]
-            site_filter = query.get("site", [None])[0]
-            status_filter = query.get("status", [None])[0]
+            try:
+                top = parse_requested_int(query, "top", 20, 1, MAX_TOP_RESULTS)
+                ip_sort = parse_requested_choice(query, "ip_sort", ALLOWED_IP_SORTS, "requests")
+                ip_order = parse_requested_choice(query, "ip_order", ALLOWED_IP_ORDERS, "desc")
+            except ValueError as exc:
+                LOG.warning("invalid stats query: %s", exc)
+                self._json_error(400, str(exc))
+                return
+            ip_filter = query.get("ip", [None])[0] or None
+            site_filter = query.get("site", [None])[0] or None
+            status_filter = query.get("status", [None])[0] or None
             self._json(
                 200,
                 {
                     "ok": True,
-                    "stats": parse_access_stats(
+                    "stats": get_access_stats_cached(
                         LOCAL_LOG,
                         top=top,
                         ip_sort=ip_sort,
@@ -466,8 +761,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self.send_header("Connection", "keep-alive")
             self.end_headers()
 
-            with WATCH_CONDITION:
-                seq = WATCH_STATE["seq"]
+            seq, _ = get_watch_state_snapshot()
 
             try:
                 while True:
@@ -490,12 +784,18 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     else:
                         self.wfile.write(b": heartbeat\n\n")
                         self.wfile.flush()
-            except (BrokenPipeError, ConnectionResetError):
+            except (BrokenPipeError, ConnectionResetError, TimeoutError, OSError, ValueError):
+                return
+            except Exception as exc:
+                LOG.warning("sse stream terminated: %s", exc)
                 return
 
         self._text(404, f"Not found: {route}")
 
     def do_POST(self):
+        if not self._require_auth():
+            return
+
         parsed = urlparse(self.path)
         route = parsed.path
 
@@ -509,10 +809,35 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
 
 def main():
+    global LOCAL_LOG, NGROK_LOG, TASK_NAMES, SERVER_LOG, AUTH_TOKEN, AUTH_USER, AUTH_PASSWORD, ALLOWLIST, DEBUG_TASK_OUTPUT
+
     parser = argparse.ArgumentParser(description="Local services dashboard")
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8091)
+    parser.add_argument("--host", default=os.environ.get("DASHBOARD_HOST", "127.0.0.1"))
+    parser.add_argument("--port", type=int, default=int(os.environ.get("DASHBOARD_PORT", "8091")))
+    parser.add_argument("--local-log", default=str(LOCAL_LOG))
+    parser.add_argument("--ngrok-log", default=str(NGROK_LOG))
+    parser.add_argument("--task-name-local", default=TASK_NAMES[0])
+    parser.add_argument("--task-name-ngrok", default=TASK_NAMES[1])
+    parser.add_argument("--server-log", default=str(SERVER_LOG))
+    parser.add_argument("--auth-token", default=AUTH_TOKEN)
+    parser.add_argument("--auth-user", default=AUTH_USER)
+    parser.add_argument("--auth-password", default=AUTH_PASSWORD)
+    parser.add_argument("--allowlist", default=",".join(ALLOWLIST))
+    parser.add_argument("--debug-task-output", action="store_true", default=DEBUG_TASK_OUTPUT)
     args = parser.parse_args()
+
+    LOCAL_LOG = Path(args.local_log)
+    NGROK_LOG = Path(args.ngrok_log)
+    TASK_NAMES = [args.task_name_local, args.task_name_ngrok]
+    SERVER_LOG = Path(args.server_log)
+    AUTH_TOKEN = args.auth_token or None
+    AUTH_USER = args.auth_user or None
+    AUTH_PASSWORD = args.auth_password or None
+    ALLOWLIST = tuple(filter(None, (item.strip() for item in (args.allowlist or "").split(","))))
+    DEBUG_TASK_OUTPUT = bool(args.debug_task_output)
+
+    configure_logging(SERVER_LOG)
+    LOG.info("starting dashboard host=%s port=%s local_log=%s ngrok_log=%s", args.host, args.port, LOCAL_LOG, NGROK_LOG)
 
     watcher = threading.Thread(target=watch_for_changes, daemon=True)
     watcher.start()

@@ -11,6 +11,7 @@
   --live: #1f8a70;
   --live-warn: #b08900;
   --live-offline: #c1121f;
+  --error: #9b2226;
 }
 
 * {
@@ -27,6 +28,10 @@ body {
   font-family: "Space Grotesk", "Segoe UI", sans-serif;
 }
 
+body[data-loading="true"] .wrap {
+  opacity: 0.94;
+}
+
 .wrap {
   max-width: 1300px;
   margin: 0 auto;
@@ -39,6 +44,30 @@ body {
   border-radius: 16px;
   padding: 18px;
   box-shadow: 0 14px 30px rgba(41, 33, 20, 0.06);
+}
+
+.banner {
+  display: none;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  font-size: 13px;
+}
+
+.banner:not(:empty) {
+  display: block;
+}
+
+.banner[data-type="info"] {
+  border-color: #abc9e8;
+  background: #eef7ff;
+}
+
+.banner[data-type="error"] {
+  border-color: #efb8b8;
+  background: #fff1f1;
+  color: var(--error);
 }
 
 .hero h1 {
@@ -123,7 +152,6 @@ body {
   justify-content: flex-end;
 }
 
-.filters-active,
 #active-filters {
   color: var(--muted);
   font-family: "IBM Plex Mono", Consolas, monospace;

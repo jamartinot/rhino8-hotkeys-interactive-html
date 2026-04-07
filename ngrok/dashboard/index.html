@@ -34,6 +34,7 @@
       </div>
 
       <p id="action-result" class="action-result"></p>
+      <div id="active-filters" class="active-filters"></div>
       <div class="grid status-grid" id="status-cards"></div>
     </header>
 
@@ -62,19 +63,12 @@
         <h2 id="stats-heading">Stats</h2>
         <div id="filters" class="filter-bar">
           <label for="filter-ip">IP</label>
-          <select id="filter-ip">
-            <option value="">All</option>
-          </select>
+          <select id="filter-ip"><option value="">All</option></select>
           <label for="filter-site">Site</label>
-          <select id="filter-site">
-            <option value="">All</option>
-          </select>
+          <select id="filter-site"><option value="">All</option></select>
           <label for="filter-status">Status</label>
-          <select id="filter-status">
-            <option value="">All</option>
-          </select>
-          <span id="active-filters"></span>
-          <button id="clear-filters" class="btn">Clear</button>
+          <select id="filter-status"><option value="">All</option></select>
+          <button id="clear-filters" class="btn">Clear Filters</button>
         </div>
       </div>
 

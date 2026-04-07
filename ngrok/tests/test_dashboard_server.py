@@ -51,11 +51,6 @@ class DashboardServerRobustnessTests(unittest.TestCase):
         handler.wfile.seek(0)
         return json.loads(handler.wfile.read().decode("utf-8"))
 
-    def restore_attr(self, obj, attr, value):
-        original = getattr(obj, attr)
-        setattr(obj, attr, value)
-        self.addCleanup(lambda: setattr(obj, attr, original))
-
     def test_parse_access_stats_ignores_malformed_lines(self):
         log = self.write_log(
             "\n"
