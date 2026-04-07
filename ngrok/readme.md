@@ -193,44 +193,50 @@ Stop live refresh with `Ctrl+C` in that terminal.
 
 ### Full Control Center (single frontend for everything)
 
-This local dashboard gives you one page for:
+This local dashboard gives you one page for everything:
 - Scheduled task status (`LocalStaticServer-8000`, `Ngrok-8000`)
 - Start/Stop/Restart buttons
 - Live local server log and live ngrok log
 - Access statistics charts (top files, status codes, IPs, hourly activity)
+- Statistics are on the same site, not a separate page
+- The page updates automatically when logs or task state change
 
 Start dashboard server:
 
 ```powershell
-py -3 "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\dashboard_server.py" --port 8090
+py -3 "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\dashboard_server.py" --port 8091
 ```
 
 Open dashboard in browser:
 
 ```powershell
-Start-Process "http://127.0.0.1:8090"
+Start-Process "http://127.0.0.1:8091"
 ```
 
-Auto-refresh interval in dashboard UI is 15 seconds.
+Live updates are event-driven. If live events are interrupted, the dashboard falls back to a slower refresh so it still updates.
+
+The dashboard auto-detects the UTF-16 log files written by PowerShell redirection, so the live logs and access statistics now parse correctly.
+
+If the browser does not refresh visually after a change, hard-refresh once with `Ctrl+R`.
 
 ### Auto-start dashboard after login
 
 Install startup task (run in elevated PowerShell):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\install-dashboard-startup.ps1" -Port 8090 -StartNow
+powershell -ExecutionPolicy Bypass -File "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\install-dashboard-startup.ps1" -Port 8091 -StartNow
 ```
 
 You can also run it directly from PowerShell:
 
 ```powershell
-& "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\install-dashboard-startup.ps1" -Port 8090 -StartNow
+& "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\install-dashboard-startup.ps1" -Port 8091 -StartNow
 ```
 
 Startup log file:
 
 ```text
-C:\ProgramData\localserver\dashboard-8090.txt
+C:\ProgramData\localserver\dashboard-8091.txt
 ```
 
 Remove startup task:

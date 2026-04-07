@@ -1,6 +1,6 @@
 param(
-  [int]$Port = 8090,
-  [string]$LogPath = "C:\ProgramData\localserver\dashboard-8090.txt"
+  [int]$Port = 8091,
+  [string]$LogPath = "C:\ProgramData\localserver\dashboard-8091.txt"
 )
 
 $ErrorActionPreference = "Stop"

@@ -3,6 +3,8 @@ import json
 import os
 import re
 import subprocess
+import threading
+import time
 from collections import Counter, deque
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -13,6 +15,9 @@ BASE_DIR = Path(__file__).resolve().parent
 LOCAL_LOG = Path(r"C:\ProgramData\localserver\server-8000.txt")
 NGROK_LOG = Path(r"C:\ProgramData\ngrok\ngrok-8000.txt")
 TASK_NAMES = ["LocalStaticServer-8000", "Ngrok-8000"]
+WATCH_LOCK = threading.Lock()
+WATCH_CONDITION = threading.Condition(WATCH_LOCK)
+WATCH_STATE = {"seq": 0, "snapshot": None}
 
 ACCESS_RE = re.compile(
     r"^(?P<ip>\S+)\s+-\s+-\s+\[(?P<dt>[^\]]+)\]\s+\"(?P<method>[A-Z]+)\s+(?P<path>\S+)\s+HTTP/\d(?:\.\d)?\"\s+(?P<status>\d{3})\s+"
@@ -27,6 +32,23 @@ def run_powershell(command: str, timeout: int = 20) -> subprocess.CompletedProce
         timeout=timeout,
         check=False,
     )
+
+
+def detect_text_encoding(path: Path) -> str:
+    with path.open("rb") as f:
+        sample = f.read(4096)
+
+    if sample.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return "utf-16"
+
+    if not sample:
+        return "utf-8"
+
+    null_ratio = sample.count(b"\x00") / len(sample)
+    if null_ratio > 0.15:
+        return "utf-16"
+
+    return "utf-8-sig"
 
 
 def get_task_status():
@@ -77,7 +99,8 @@ def read_tail(path: Path, lines: int = 80):
     if not path.exists():
         return [f"[missing] {path}"]
 
-    with path.open("r", encoding="utf-8", errors="replace") as f:
+    encoding = detect_text_encoding(path)
+    with path.open("r", encoding=encoding, errors="replace") as f:
         return list(deque(f, maxlen=lines))
 
 
@@ -98,7 +121,8 @@ def parse_access_stats(path: Path, top: int = 20):
             "hourly": [],
         }
 
-    with path.open("r", encoding="utf-8", errors="replace") as f:
+    encoding = detect_text_encoding(path)
+    with path.open("r", encoding=encoding, errors="replace") as f:
         for line in f:
             m = ACCESS_RE.match(line)
             if not m:
@@ -146,6 +170,46 @@ def run_task_action(action: str):
         return {"ok": False, "error": proc.stderr.strip() or proc.stdout.strip()}
 
     return {"ok": True}
+
+
+def get_file_signature(path: Path):
+    if not path.exists():
+        return {"exists": False}
+
+    stat = path.stat()
+    return {
+        "exists": True,
+        "size": stat.st_size,
+        "mtime": stat.st_mtime,
+    }
+
+
+def build_watch_snapshot():
+    return {
+        "local_log": get_file_signature(LOCAL_LOG),
+        "ngrok_log": get_file_signature(NGROK_LOG),
+        "task_status": get_task_status(),
+    }
+
+
+def snapshot_signature(snapshot):
+    return json.dumps(snapshot, sort_keys=True, default=str)
+
+
+def watch_for_changes(interval_seconds: int = 2):
+    last_signature = None
+    while True:
+        snapshot = build_watch_snapshot()
+        signature = snapshot_signature(snapshot)
+
+        with WATCH_CONDITION:
+            if signature != last_signature:
+                WATCH_STATE["seq"] += 1
+                WATCH_STATE["snapshot"] = snapshot
+                WATCH_CONDITION.notify_all()
+                last_signature = signature
+
+        time.sleep(interval_seconds)
 
 
 class DashboardHandler(BaseHTTPRequestHandler):
@@ -237,7 +301,41 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._json(200, {"ok": True, "stats": parse_access_stats(LOCAL_LOG, top=top)})
             return
 
-        self._text(404, "Not found")
+        if "events" in route or route in ("/events", "/api/stream"):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "keep-alive")
+            self.end_headers()
+
+            with WATCH_CONDITION:
+                seq = WATCH_STATE["seq"]
+
+            try:
+                while True:
+                    with WATCH_CONDITION:
+                        WATCH_CONDITION.wait(timeout=15)
+                        current_seq = WATCH_STATE["seq"]
+                        snapshot = WATCH_STATE["snapshot"]
+
+                    if current_seq != seq:
+                        seq = current_seq
+                        payload = {
+                            "type": "update",
+                            "seq": seq,
+                            "time": datetime.now().isoformat(),
+                            "snapshot": snapshot,
+                        }
+                        data = f"event: update\ndata: {json.dumps(payload)}\n\n".encode("utf-8")
+                        self.wfile.write(data)
+                        self.wfile.flush()
+                    else:
+                        self.wfile.write(b": heartbeat\n\n")
+                        self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError):
+                return
+
+        self._text(404, f"Not found: {route}")
 
     def do_POST(self):
         parsed = urlparse(self.path)
@@ -255,8 +353,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
 def main():
     parser = argparse.ArgumentParser(description="Local services dashboard")
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8090)
+    parser.add_argument("--port", type=int, default=8091)
     args = parser.parse_args()
+
+    watcher = threading.Thread(target=watch_for_changes, daemon=True)
+    watcher.start()
 
     server = ThreadingHTTPServer((args.host, args.port), DashboardHandler)
     print(f"Dashboard running at http://{args.host}:{args.port}")
