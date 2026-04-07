@@ -1,0 +1,200 @@
+﻿<!doctype html>
+<html lang='en'>
+<head>
+  <meta charset='utf-8' />
+  <meta name='viewport' content='width=device-width, initial-scale=1' />
+  <title>Access Statistics Report</title>
+  <style>
+    :root {
+      --bg: #f4f1ea;
+      --panel: #fffdf9;
+      --ink: #1f2a30;
+      --muted: #5d676e;
+      --file: #005f73;
+      --status: #ae2012;
+      --ip: #0a9396;
+      --hour: #ca6702;
+      --border: #ded5c7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Segoe UI, Tahoma, sans-serif;
+      color: var(--ink);
+      background: radial-gradient(circle at 10% 10%, #fff6df, var(--bg));
+    }
+    .wrap {
+      max-width: 1200px;
+      margin: 24px auto;
+      padding: 0 16px 32px;
+    }
+    .hero {
+      background: linear-gradient(120deg, #e5f4f6, #fff4e9);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    .meta { color: var(--muted); font-size: 14px; }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .card .k { font-size: 13px; color: var(--muted); }
+    .card .v { font-size: 26px; font-weight: 700; margin-top: 4px; }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+    }
+    .panel h2 { margin: 4px 0 12px; font-size: 18px; }
+    .row {
+      display: grid;
+      grid-template-columns: minmax(180px, 34%) 1fr 64px;
+      gap: 10px;
+      align-items: center;
+      margin: 6px 0;
+    }
+    .label {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 13px;
+    }
+    .label.short { max-width: 120px; }
+    .bar-wrap {
+      width: 100%;
+      height: 12px;
+      background: #e9e3d8;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .bar { height: 100%; border-radius: 999px; }
+    .bar.file { background: var(--file); }
+    .bar.status { background: var(--status); }
+    .bar.ip { background: var(--ip); }
+    .bar.hour { background: var(--hour); }
+    .value {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      font-size: 13px;
+      color: #1f2a30;
+    }
+    @media (max-width: 720px) {
+      .row {
+        grid-template-columns: 1fr;
+        gap: 6px;
+      }
+      .value { text-align: left; }
+    }
+  </style>
+</head>
+<body>
+  <div class='wrap'>
+    <section class='hero'>
+      <h1>Access Statistics Report</h1>
+      <div class='meta'>Generated: 2026-04-07 06:19:32</div>
+      <div class='meta'>Source log: C:\ProgramData\localserver\server-8000.txt</div>
+      <div class='cards'>
+        <div class='card'><div class='k'>Total Requests</div><div class='v'>25</div></div>
+        <div class='card'><div class='k'>Unique Files</div><div class='v'>5</div></div>
+        <div class='card'><div class='k'>Status Codes Seen</div><div class='v'>3</div></div>
+        <div class='card'><div class='k'>Client IPs Seen</div><div class='v'>1</div></div>
+      </div>
+    </section>
+
+    <section class='grid'>
+      <section class='panel'>
+        <h2>Top Accessed Files</h2>
+            <div class='row'>
+      <div class='label' title='/Rhino8_cheat_sheet_timestamps_interactive.html'>/Rhino8_cheat_sheet_timestamps_interactive.html</div>
+      <div class='bar-wrap'><div class='bar file' style='width: 100%'></div></div>
+      <div class='value'>10</div>
+    </div>
+    <div class='row'>
+      <div class='label' title='/cai/CAI_%20Collision%20Awareness%20Indicator.html'>/cai/CAI_%20Collision%20Awareness%20Indicator.html</div>
+      <div class='bar-wrap'><div class='bar file' style='width: 60%'></div></div>
+      <div class='value'>6</div>
+    </div>
+    <div class='row'>
+      <div class='label' title='/cai/CAI_%20Collision%20Awareness%20Indicator_files/css2'>/cai/CAI_%20Collision%20Awareness%20Indicator_files/css2</div>
+      <div class='bar-wrap'><div class='bar file' style='width: 50%'></div></div>
+      <div class='value'>5</div>
+    </div>
+    <div class='row'>
+      <div class='label' title='/favicon.ico'>/favicon.ico</div>
+      <div class='bar-wrap'><div class='bar file' style='width: 20%'></div></div>
+      <div class='value'>2</div>
+    </div>
+    <div class='row'>
+      <div class='label' title='/Rhino%208%20Interactive%20Cheat%20Sheet%20Manual.pdf'>/Rhino%208%20Interactive%20Cheat%20Sheet%20Manual.pdf</div>
+      <div class='bar-wrap'><div class='bar file' style='width: 20%'></div></div>
+      <div class='value'>2</div>
+    </div>
+      </section>
+
+      <section class='panel'>
+        <h2>Status Code Breakdown</h2>
+            <div class='row'>
+      <div class='label short' title='200'>200</div>
+      <div class='bar-wrap'><div class='bar status' style='width: 76.92%'></div></div>
+      <div class='value'>10</div>
+    </div>
+    <div class='row'>
+      <div class='label short' title='304'>304</div>
+      <div class='bar-wrap'><div class='bar status' style='width: 100%'></div></div>
+      <div class='value'>13</div>
+    </div>
+    <div class='row'>
+      <div class='label short' title='404'>404</div>
+      <div class='bar-wrap'><div class='bar status' style='width: 15.38%'></div></div>
+      <div class='value'>2</div>
+    </div>
+      </section>
+
+      <section class='panel'>
+        <h2>Top Client IPs</h2>
+            <div class='row'>
+      <div class='label' title='::1'>::1</div>
+      <div class='bar-wrap'><div class='bar ip' style='width: 100%'></div></div>
+      <div class='value'>25</div>
+    </div>
+      </section>
+
+      <section class='panel'>
+        <h2>Requests Per Hour</h2>
+            <div class='row'>
+      <div class='label' title='2026-Apr-07 04:00'>2026-Apr-07 04:00</div>
+      <div class='bar-wrap'><div class='bar hour' style='width: 90.91%'></div></div>
+      <div class='value'>10</div>
+    </div>
+    <div class='row'>
+      <div class='label' title='2026-Apr-07 05:00'>2026-Apr-07 05:00</div>
+      <div class='bar-wrap'><div class='bar hour' style='width: 100%'></div></div>
+      <div class='value'>11</div>
+    </div>
+    <div class='row'>
+      <div class='label' title='2026-Apr-07 06:00'>2026-Apr-07 06:00</div>
+      <div class='bar-wrap'><div class='bar hour' style='width: 36.36%'></div></div>
+      <div class='value'>4</div>
+    </div>
+      </section>
+    </section>
+  </div>
+</body>
+</html>

@@ -136,7 +136,108 @@ Get-Content C:\ProgramData\localserver\server-8000.txt -Tail 50 -Wait
 Get-Content C:\ProgramData\ngrok\ngrok-8000.txt -Tail 50 -Wait
 ```
 
-Tip: open two PowerShell windows to watch both logs at the same time.
+Tip: open two windows or one split window to watch both logs at the same time.
+
+### one Windows Terminal window split side-by-side
+
+```powershell
+wt -w 0 new-tab --title "LOCAL SERVER" powershell -NoExit -Command "Get-Content 'C:\ProgramData\localserver\server-8000.txt' -Tail 50 -Wait" `; split-pane -V --title "NGROK" powershell -NoExit -Command "Get-Content 'C:\ProgramData\ngrok\ngrok-8000.txt' -Tail 50 -Wait"
+```
+
+Notes:
+- Use `` `; `` (escaped semicolon). If you use plain `;`, PowerShell tries to run `split-pane` itself and fails.
+- `-V` creates left/right panes. Use `-H` for top/bottom panes.
+
+
+Quick recognition rules:
+- If you see `GET /... HTTP/1.1` with status codes (`200`, `304`, `404`), it is the local server log.
+- If you see `t=... lvl=... msg=...` with `tunnel/session/url=...`, it is the ngrok log.
+
+### Graphical statistics for accessed files
+
+Generate an HTML dashboard from your local server log:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\generate-access-report.ps1"
+```
+
+Open the generated dashboard:
+
+```powershell
+Start-Process "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\access-report.html"
+```
+
+Optional parameters:
+
+```powershell
+# choose a different log file and output path
+powershell -ExecutionPolicy Bypass -File "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\generate-access-report.ps1" `
+  -LogPath "C:\ProgramData\localserver\server-8000.txt" `
+  -OutPath "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\access-report.html" `
+  -Top 100
+```
+
+The report includes:
+- Top accessed files (bar chart)
+- Status code breakdown (bar chart)
+- Top client IPs (bar chart)
+- Requests per hour (bar chart)
+
+Live auto-refresh every 15 seconds (regenerate + browser open once):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\start-access-report-live.ps1" -IntervalSeconds 15 -Open
+```
+
+Stop live refresh with `Ctrl+C` in that terminal.
+
+### Full Control Center (single frontend for everything)
+
+This local dashboard gives you one page for:
+- Scheduled task status (`LocalStaticServer-8000`, `Ngrok-8000`)
+- Start/Stop/Restart buttons
+- Live local server log and live ngrok log
+- Access statistics charts (top files, status codes, IPs, hourly activity)
+
+Start dashboard server:
+
+```powershell
+py -3 "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\dashboard_server.py" --port 8090
+```
+
+Open dashboard in browser:
+
+```powershell
+Start-Process "http://127.0.0.1:8090"
+```
+
+Auto-refresh interval in dashboard UI is 15 seconds.
+
+### Auto-start dashboard after login
+
+Install startup task (run in elevated PowerShell):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\install-dashboard-startup.ps1" -Port 8090 -StartNow
+```
+
+You can also run it directly from PowerShell:
+
+```powershell
+& "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\install-dashboard-startup.ps1" -Port 8090 -StartNow
+```
+
+Startup log file:
+
+```text
+C:\ProgramData\localserver\dashboard-8090.txt
+```
+
+Remove startup task:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\uninstall-dashboard-startup.ps1"
+```
 
 ## Common Errors and What They Mean
 

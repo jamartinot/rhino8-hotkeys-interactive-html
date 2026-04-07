@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Local + ngrok Control Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/dashboard.css" />
+</head>
+<body>
+  <main class="wrap">
+    <section class="hero">
+      <h1>Control Center</h1>
+      <p>See status, logs, and file access statistics in one place.</p>
+      <div class="hero-meta">
+        <span id="last-refresh">Last refresh: --</span>
+        <span id="next-refresh">Next refresh in 15s</span>
+      </div>
+      <div class="actions">
+        <button id="start-all" class="btn good">Start All</button>
+        <button id="stop-all" class="btn warn">Stop All</button>
+        <button id="restart-all" class="btn">Restart All</button>
+        <a class="btn link" href="/access-report.html" target="_blank" rel="noopener">Open Static Report</a>
+      </div>
+      <p id="action-result" class="action-result"></p>
+    </section>
+
+    <section class="grid status-grid" id="status-cards"></section>
+
+    <section class="grid two">
+      <article class="panel">
+        <h2>Local Server Log</h2>
+        <pre id="local-log" class="log-box">Loading...</pre>
+      </article>
+      <article class="panel">
+        <h2>ngrok Log</h2>
+        <pre id="ngrok-log" class="log-box">Loading...</pre>
+      </article>
+    </section>
+
+    <section class="grid two">
+      <article class="panel">
+        <h2>Top Accessed Files</h2>
+        <div id="chart-files"></div>
+      </article>
+      <article class="panel">
+        <h2>Status Code Breakdown</h2>
+        <div id="chart-status"></div>
+      </article>
+    </section>
+
+    <section class="grid two">
+      <article class="panel">
+        <h2>Top Client IPs</h2>
+        <div id="chart-ips"></div>
+      </article>
+      <article class="panel">
+        <h2>Requests Per Hour</h2>
+        <div id="chart-hourly"></div>
+      </article>
+    </section>
+  </main>
+
+  <script src="/dashboard.js"></script>
+</body>
+</html>
