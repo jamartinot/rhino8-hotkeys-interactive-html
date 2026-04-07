@@ -14,8 +14,10 @@
     <section class="hero">
       <h1>Control Center</h1>
       <p>See status, logs, and file access statistics in one place.</p>
+      <div id="global-banner" class="banner" role="status" aria-live="polite"></div>
       <div class="hero-meta">
         <span id="last-refresh">Last refresh: --</span>
+        <span id="connection-status" class="status-pill" data-status="offline">offline</span>
         <span id="next-refresh">Next refresh in 15s</span>
       </div>
       <div class="actions">
@@ -25,6 +27,7 @@
         <a class="btn link" href="/access-report.html" target="_blank" rel="noopener">Open Report</a>
       </div>
       <p id="action-result" class="action-result"></p>
+      <div id="active-filters" class="active-filters"></div>
     </section>
 
     <section class="grid status-grid" id="status-cards"></section>
@@ -46,6 +49,10 @@
             <option value="">All</option>
           </select>
           <button id="clear-filters" class="btn">Clear Filters</button>
+          <label class="toggle">
+            <input id="auto-scroll" type="checkbox" checked />
+            Auto-scroll logs
+          </label>
         </div>
       </article>
     </section>
@@ -53,11 +60,11 @@
     <section class="grid two">
       <article class="panel">
         <h2>Local Server Log</h2>
-        <pre id="local-log" class="log-box">Loading...</pre>
+        <div id="local-log" class="log-box log-stream" aria-live="polite">Loading...</div>
       </article>
       <article class="panel">
         <h2>ngrok Log</h2>
-        <pre id="ngrok-log" class="log-box">Loading...</pre>
+        <div id="ngrok-log" class="log-box log-stream" aria-live="polite">Loading...</div>
       </article>
     </section>
 

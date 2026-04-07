@@ -2,6 +2,7 @@ import importlib.util
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "dashboard_server.py"
 SPEC = importlib.util.spec_from_file_location("dashboard_server", MODULE_PATH)
@@ -83,6 +84,49 @@ class DashboardServerRobustnessTests(unittest.TestCase):
         self.assertEqual(stats["total_requests"], 1)
         self.assertEqual(stats["top_files"][0]["label"], "/b")
         self.assertIn("404", stats["status_explanations"])
+
+    def test_parse_requested_int_enforces_bounds(self):
+        with self.assertRaises(ValueError):
+            DASHBOARD.parse_requested_int({"top": ["0"]}, "top", 20, 1, 100)
+        with self.assertRaises(ValueError):
+            DASHBOARD.parse_requested_int({"tail": ["501"]}, "tail", 80, 1, 500)
+
+    def test_get_access_stats_cached_avoids_repeated_parsing(self):
+        log = self.write_log(
+            "10.0.0.1 - - [07/Apr/2026 08:00:01] \"GET /a HTTP/1.1\" 200 -\n"
+            "10.0.0.2 - - [07/Apr/2026 08:00:02] \"GET /b HTTP/1.1\" 404 -\n"
+        )
+        calls = {"count": 0}
+
+        def fake_parse(*args, **kwargs):
+            calls["count"] += 1
+            return {"ok": True, "marker": calls["count"]}
+
+        with patch.object(DASHBOARD, "parse_access_stats", side_effect=fake_parse):
+            first = DASHBOARD.get_access_stats_cached(log, top=10)
+            second = DASHBOARD.get_access_stats_cached(log, top=10)
+
+        self.assertEqual(first, second)
+        self.assertEqual(calls["count"], 1)
+
+    def test_get_task_status_is_throttled(self):
+        responses = [
+            '{"TaskName":"A","State":"Ready"}',
+        ]
+
+        def fake_run_powershell(command, timeout=20):
+            return type("Proc", (), {"returncode": 0, "stdout": responses[0], "stderr": ""})()
+
+        with DASHBOARD.CACHE_LOCK:
+            DASHBOARD.TASK_STATUS_CACHE["ts"] = 0.0
+            DASHBOARD.TASK_STATUS_CACHE["payload"] = None
+
+        with patch.object(DASHBOARD, "run_powershell", side_effect=fake_run_powershell) as mock_run:
+            first = DASHBOARD.get_task_status()
+            second = DASHBOARD.get_task_status()
+
+        self.assertEqual(first, second)
+        self.assertEqual(mock_run.call_count, 1)
 
     def test_parse_dimensions_collects_values_and_explanations(self):
         log = self.write_log(
