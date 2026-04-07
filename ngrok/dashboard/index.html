@@ -11,28 +11,56 @@
 </head>
 <body>
   <main class="wrap">
-    <section class="hero">
-      <h1>Control Center</h1>
-      <p>See status, logs, and file access statistics in one place.</p>
-      <div class="hero-meta">
-        <span id="last-refresh">Last refresh: --</span>
-        <span id="next-refresh">Next refresh in 15s</span>
+    <header id="status-panel" class="hero panel shell">
+      <div class="hero-copy">
+        <p class="eyebrow">Local + ngrok Control Center</p>
+        <h1>Dashboard</h1>
+        <p>Live status, logs, filters, and request analytics in one place.</p>
       </div>
+
+      <div class="hero-meta">
+        <span id="conn-status" class="status reconnecting">● Connecting</span>
+        <span id="last-refresh">Last refresh: --</span>
+        <span id="next-refresh">Next refresh in 60s</span>
+      </div>
+
+      <div id="error-banner" class="error-banner" hidden></div>
+
       <div class="actions">
         <button id="start-all" class="btn good">Start All</button>
         <button id="stop-all" class="btn warn">Stop All</button>
-        <button id="restart-all" class="btn">Restart All</button>
+        <button id="restart-btn" class="btn">Restart</button>
         <a class="btn link" href="/access-report.html" target="_blank" rel="noopener">Open Report</a>
       </div>
+
       <p id="action-result" class="action-result"></p>
+      <div class="grid status-grid" id="status-cards"></div>
+    </header>
+
+    <section class="layout-section" aria-labelledby="logs-heading">
+      <div class="section-head">
+        <h2 id="logs-heading">Logs</h2>
+        <div class="section-actions">
+          <button id="toggle-scroll" class="btn">Pause</button>
+          <button id="jump-latest" class="btn">Latest</button>
+        </div>
+      </div>
+      <div class="grid two">
+        <article class="panel">
+          <h3>Local Server Log</h3>
+          <div id="logs-local" class="log-container">Loading...</div>
+        </article>
+        <article class="panel">
+          <h3>ngrok Log</h3>
+          <div id="logs-ngrok" class="log-container">Loading...</div>
+        </article>
+      </div>
     </section>
 
-    <section class="grid status-grid" id="status-cards"></section>
-
-    <section class="grid">
-      <article class="panel">
-        <h2>Drill-Down Filters</h2>
-        <div class="sort-controls">
+    <section class="layout-section" aria-labelledby="stats-heading">
+      <div class="section-head">
+        <h2 id="stats-heading">Stats</h2>
+        <div id="filters" class="filter-bar">
           <label for="filter-ip">IP</label>
           <select id="filter-ip">
             <option value="">All</option>
@@ -45,82 +73,72 @@
           <select id="filter-status">
             <option value="">All</option>
           </select>
-          <button id="clear-filters" class="btn">Clear Filters</button>
+          <span id="active-filters"></span>
+          <button id="clear-filters" class="btn">Clear</button>
         </div>
-      </article>
-    </section>
+      </div>
 
-    <section class="grid two">
-      <article class="panel">
-        <h2>Local Server Log</h2>
-        <pre id="local-log" class="log-box">Loading...</pre>
-      </article>
-      <article class="panel">
-        <h2>ngrok Log</h2>
-        <pre id="ngrok-log" class="log-box">Loading...</pre>
-      </article>
-    </section>
+      <div class="grid two">
+        <article class="panel">
+          <h3>Top Accessed Files</h3>
+          <div id="chart-files"></div>
+        </article>
+        <article class="panel">
+          <h3>HTTP Methods</h3>
+          <div id="chart-methods"></div>
+        </article>
+      </div>
 
-    <section class="grid two">
-      <article class="panel">
-        <h2>Top Accessed Files</h2>
-        <div id="chart-files"></div>
-      </article>
-      <article class="panel">
-        <h2>HTTP Methods</h2>
-        <div id="chart-methods"></div>
-      </article>
-    </section>
+      <div class="grid two">
+        <article class="panel">
+          <h3>Status Code Breakdown</h3>
+          <div id="chart-status"></div>
+        </article>
+        <article class="panel">
+          <h3>Status Families</h3>
+          <div id="chart-families"></div>
+        </article>
+      </div>
 
-    <section class="grid two">
-      <article class="panel">
-        <h2>Status Code Breakdown</h2>
-        <div id="chart-status"></div>
-      </article>
-      <article class="panel">
-        <h2>Status Families</h2>
-        <div id="chart-families"></div>
-      </article>
-    </section>
+      <div class="grid two">
+        <article class="panel">
+          <div class="panel-head">
+            <h3>Top Client IPs</h3>
+            <div class="sort-controls">
+              <label for="ip-sort">Sort by</label>
+              <select id="ip-sort">
+                <option value="requests" selected>Requests</option>
+                <option value="sites">Unique Sites</option>
+                <option value="ip">IP Address</option>
+              </select>
+              <label for="ip-order">Order</label>
+              <select id="ip-order">
+                <option value="desc" selected>Desc</option>
+                <option value="asc">Asc</option>
+              </select>
+            </div>
+          </div>
+          <div id="stats-table"></div>
+        </article>
+        <article class="panel">
+          <h3>Sites Per IP</h3>
+          <div id="chart-sites-per-ip"></div>
+        </article>
+      </div>
 
-    <section class="grid two">
-      <article class="panel">
-        <h2>Top Client IPs</h2>
-        <div class="sort-controls">
-          <label for="ip-sort">Sort by</label>
-          <select id="ip-sort">
-            <option value="requests" selected>Requests</option>
-            <option value="sites">Unique Sites</option>
-            <option value="ip">IP Address</option>
-          </select>
-          <label for="ip-order">Order</label>
-          <select id="ip-order">
-            <option value="desc" selected>Desc</option>
-            <option value="asc">Asc</option>
-          </select>
-        </div>
-        <div id="chart-ips"></div>
-      </article>
-      <article class="panel">
-        <h2>Sites Per IP</h2>
-        <div id="chart-sites-per-ip"></div>
-      </article>
-    </section>
+      <div class="grid two">
+        <article class="panel">
+          <h3>Requests Per Hour</h3>
+          <div id="chart-hourly"></div>
+        </article>
+        <article class="panel">
+          <h3>Recent Requests</h3>
+          <div id="recent-requests"></div>
+        </article>
+      </div>
 
-    <section class="grid two">
       <article class="panel">
-        <h2>Requests Per Hour</h2>
-        <div id="chart-hourly"></div>
-      </article>
-      <article class="panel">
-        <h2>Recent Requests</h2>
-        <div id="recent-requests"></div>
-      </article>
-    </section>
-
-    <section class="grid">
-      <article class="panel">
-        <h2>Status Code Explanations</h2>
+        <h3>Status Code Explanations</h3>
         <div id="status-explanations"></div>
       </article>
     </section>

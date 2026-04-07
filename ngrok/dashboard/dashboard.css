@@ -8,6 +8,9 @@
   --accent-2: #bc3908;
   --ok: #2a9d8f;
   --warn: #bc3908;
+  --live: #1f8a70;
+  --live-warn: #b08900;
+  --live-offline: #c1121f;
 }
 
 * {
@@ -35,11 +38,21 @@ body {
   border: 1px solid var(--line);
   border-radius: 16px;
   padding: 18px;
+  box-shadow: 0 14px 30px rgba(41, 33, 20, 0.06);
 }
 
 .hero h1 {
   margin: 0;
   font-size: clamp(28px, 4vw, 44px);
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 700;
 }
 
 .hero p {
@@ -49,6 +62,7 @@ body {
 
 .hero-meta {
   display: flex;
+  flex-wrap: wrap;
   gap: 16px;
   margin-top: 12px;
   color: var(--muted);
@@ -56,11 +70,64 @@ body {
   font-size: 13px;
 }
 
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+}
+
+.status.connected {
+  color: var(--live);
+}
+
+.status.reconnecting {
+  color: var(--live-warn);
+}
+
+.status.offline {
+  color: var(--live-offline);
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 14px;
+}
+
+.section-head,
+.panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.section-head {
+  margin-top: 14px;
+  margin-bottom: 8px;
+}
+
+.section-actions,
+.filter-bar,
+.sort-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.filter-bar {
+  justify-content: flex-end;
+}
+
+.filters-active,
+#active-filters {
+  color: var(--muted);
+  font-family: "IBM Plex Mono", Consolas, monospace;
+  font-size: 13px;
 }
 
 .btn {
@@ -76,6 +143,12 @@ body {
 
 .btn:hover {
   transform: translateY(-1px);
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  transform: none;
 }
 
 .btn.good {
@@ -96,6 +169,17 @@ body {
 .action-result {
   min-height: 20px;
   margin-top: 10px;
+  font-family: "IBM Plex Mono", Consolas, monospace;
+  font-size: 13px;
+}
+
+.error-banner {
+  margin-top: 12px;
+  border: 1px solid #efb0b7;
+  background: #fff0f2;
+  color: #8a1f2d;
+  border-radius: 10px;
+  padding: 10px 12px;
   font-family: "IBM Plex Mono", Consolas, monospace;
   font-size: 13px;
 }
@@ -123,15 +207,11 @@ body {
 }
 
 .sort-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  margin-bottom: 10px;
   font-size: 13px;
 }
 
-.sort-controls select {
+.sort-controls select,
+.filter-bar select {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
@@ -159,9 +239,9 @@ body {
   font-family: "IBM Plex Mono", Consolas, monospace;
 }
 
-.log-box {
+.log-container {
   margin: 0;
-  height: 320px;
+  max-height: 300px;
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -169,6 +249,9 @@ body {
   font-family: "IBM Plex Mono", Consolas, monospace;
   font-size: 12px;
   background: #fff;
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-height: 220px;
 }
 
 .bar-row {
@@ -232,14 +315,81 @@ body {
   word-break: break-word;
 }
 
+.recent-table th[data-sort],
+.recent-table tr[data-ip] {
+  cursor: pointer;
+}
+
+.recent-table tr[data-ip]:hover {
+  background: #fcf3e4;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-family: "IBM Plex Mono", Consolas, monospace;
+  font-size: 12px;
+  background: #f3f1ea;
+}
+
 .val {
   text-align: right;
   font-family: "IBM Plex Mono", Consolas, monospace;
   font-size: 12px;
 }
 
+.sortable {
+  user-select: none;
+}
+
+.sortable[data-active="true"] {
+  color: var(--accent);
+}
+
+.table-wrap {
+  overflow: auto;
+}
+
+.stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: "IBM Plex Mono", Consolas, monospace;
+  font-size: 12px;
+}
+
+.stats-table th,
+.stats-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.stats-table th {
+  background: #fffdf8;
+}
+
+.stats-table tr[data-ip] {
+  cursor: pointer;
+}
+
+.stats-table tr[data-ip]:hover {
+  background: #fcf3e4;
+}
+
+.shell {
+  display: grid;
+  gap: 12px;
+}
+
 @media (max-width: 960px) {
   .two {
     grid-template-columns: 1fr;
+  }
+
+  .filter-bar {
+    justify-content: flex-start;
   }
 }
