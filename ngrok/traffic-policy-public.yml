@@ -1,0 +1,28 @@
+on_http_request:
+  - actions:
+      - type: rate-limit
+        config:
+          name: per-ip-rate-limit
+          algorithm: sliding_window
+          capacity: 40 # max 40 requests, then block until the window resets
+          rate: 60s
+          bucket_key:
+            - conn.client_ip
+
+  # Static site is public, but API routes should never be reachable from internet here.
+  - expressions:
+      - req.url.path.startsWith('/api/')
+    actions:
+      - type: deny
+
+  # Only allow read-only methods for a public static site.
+  - expressions:
+      - req.method != 'GET' && req.method != 'HEAD'
+    actions:
+      - type: deny
+
+  # Block common hidden file and admin-scan paths before they hit upstream.
+  - expressions:
+      - req.url.path.startsWith('/.') || req.url.path.startsWith('/.git') || req.url.path.startsWith('/.env') || req.url.path.startsWith('/wp-admin') || req.url.path.startsWith('/wp-login') || req.url.path.startsWith('/phpmyadmin') || req.url.path.startsWith('/cgi-bin') || req.url.path.startsWith('/server-status') || req.url.path.startsWith('/actuator') || req.url.path.startsWith('/vendor') || req.url.path.endsWith('.php') || req.url.path.endsWith('.asp') || req.url.path.endsWith('.aspx') || req.url.path.endsWith('.jsp') || req.url.path.contains('..')
+    actions:
+      - type: deny

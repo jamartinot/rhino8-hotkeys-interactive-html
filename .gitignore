@@ -2,6 +2,7 @@
 .venv/
 venv/
 __pycache__/
+/ngrok/__pycache__/
 *.py[cod]
 *.pyo
 .pytest_cache/
@@ -36,9 +37,10 @@ desktop.ini
 *.tar
 *.tar.gz
 *.yml
-
+!ngrok/traffic-policy-public.yml
 # Ignore the cai directory under the ngrok tunneling folder
 /ngrok_tunneling_this_has_port_to_INTERNET/cai/
 
 #ignore commit-history.txt
 commit-history.txt
+todo.txt

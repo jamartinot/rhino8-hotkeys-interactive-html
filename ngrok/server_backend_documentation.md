@@ -258,6 +258,48 @@ Get all available filter values (IPs, sites, status codes) and status explanatio
 curl.exe "http://127.0.0.1:8091/api/dimensions"
 ```
 
+## Defensive Attack Simulation Tool
+
+Use the local simulator to stress-test your own site with non-destructive probes.
+
+Script:
+
+`C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\security_attack_simulator.py`
+
+### Quick local run
+
+```powershell
+py -3 "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\security_attack_simulator.py" `
+  --target "http://127.0.0.1:8000" `
+  --profile standard `
+  --output "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\attack-simulation-report.json"
+```
+
+### Scan your public tunnel (only if you own it)
+
+```powershell
+py -3 "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\security_attack_simulator.py" `
+  --target "https://YOUR-NGROK-URL/Rhino8_cheat_sheet_timestamps_interactive.html" `
+  --allow-public-target `
+  --profile aggressive `
+  --burst-requests 120 `
+  --burst-concurrency 20
+```
+
+Notes:
+- `--target` can now be a full page URL. The simulator will derive the origin and entry path automatically.
+- Dashboard API `/api/stats` now includes `attack_report` so Security tab shows the latest simulation summary and findings.
+
+### What it tests
+
+- Sensitive-path access (`/.git`, `/admin`, `/api/*`)
+- Path traversal variants (encoded and mixed separators)
+- Method hardening (`TRACE`, `PUT`, `DELETE`)
+- Header robustness checks
+- Burst traffic to verify rate limiting
+
+The tool writes a JSON report and prints findings by severity.
+
 Start dashboard server:
 
 ```powershell
@@ -528,3 +570,48 @@ Expected outcome:
 - ngrok task healthy
 - localhost reachable
 - logs show normal activity and no auth errors
+
+## Protect Public Tunnel From Scanners (Keep Site Public)
+
+Use ngrok Traffic Policy at the edge so public HTML stays open while scanner paths are blocked and abusive IPs are throttled.
+
+Policy file:
+
+`C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\traffic-policy-public.yml`
+
+### Immediate run (no task edit)
+
+```powershell
+Stop-ScheduledTask -TaskName "Ngrok-8000" -ErrorAction SilentlyContinue
+& "C:\ProgramData\chocolatey\bin\ngrok.exe" http 8000 --traffic-policy-file "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\traffic-policy-public.yml" --log stdout
+```
+
+### Persist in Scheduled Task (PowerShell as Administrator)
+
+Quick script option:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\apply-ngrok-policy-to-task.ps1"
+```
+
+Manual command option:
+
+```powershell
+$policy = "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\traffic-policy-public.yml"
+$task = Get-ScheduledTask -TaskName "Ngrok-8000"
+$arg = $task.Actions[0].Arguments
+if ($arg -notmatch "--traffic-policy-file") {
+  $arg = $arg -replace "--log stdout", "--traffic-policy-file '$policy' --log stdout"
+}
+$action = New-ScheduledTaskAction -Execute $task.Actions[0].Execute -Argument $arg
+Register-ScheduledTask -TaskName "Ngrok-8000" -Action $action -Trigger $task.Triggers -Principal $task.Principal -Settings $task.Settings -Force | Out-Null
+Stop-ScheduledTask -TaskName "Ngrok-8000" -ErrorAction SilentlyContinue
+Start-ScheduledTask -TaskName "Ngrok-8000"
+```
+
+### Quick verification
+
+```powershell
+curl.exe -I "https://<your-ngrok-domain>/.git/config"   # expect 403
+curl.exe -I "https://<your-ngrok-domain>/Rhino8_cheat_sheet_timestamps_interactive.html"   # expect 200
+```

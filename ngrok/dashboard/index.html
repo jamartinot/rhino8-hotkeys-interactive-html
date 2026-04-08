@@ -13,7 +13,7 @@
   <main class="wrap">
     <section class="hero">
       <h1>Control Center</h1>
-      <p>See status, logs, and file access statistics in one place.</p>
+      <p>One unified dashboard for traffic, security response, and logs.</p>
       <div id="global-banner" class="banner" role="status" aria-live="polite"></div>
       <div class="hero-meta">
         <span id="last-refresh">Last refresh: --</span>
@@ -24,17 +24,24 @@
         <button id="start-all" class="btn good">Start All</button>
         <button id="stop-all" class="btn warn">Stop All</button>
         <button id="restart-all" class="btn">Restart All</button>
+        <button id="test-connection" class="btn">Test Site</button>
         <a class="btn link" href="/access-report.html" target="_blank" rel="noopener">Open Report</a>
       </div>
       <p id="action-result" class="action-result"></p>
       <div id="active-filters" class="active-filters"></div>
+      <nav class="tabs" aria-label="Dashboard sections">
+        <button type="button" class="tab is-active" data-tab="overview">Overview</button>
+        <button type="button" class="tab" data-tab="security">Security</button>
+        <button type="button" class="tab" data-tab="logs">Logs</button>
+        <button type="button" class="tab" data-tab="settings">Settings</button>
+      </nav>
     </section>
 
     <section class="grid status-grid" id="status-cards"></section>
 
-    <section class="grid">
+    <section class="grid panel-group" data-panel="overview">
       <article class="panel">
-        <h2>Drill-Down Filters</h2>
+        <h2>Advanced Filters</h2>
         <div class="sort-controls">
           <label for="filter-ip">IP</label>
           <select id="filter-ip">
@@ -48,6 +55,14 @@
           <select id="filter-status">
             <option value="">All</option>
           </select>
+          <label for="filter-method">Method</label>
+          <select id="filter-method" multiple size="4"></select>
+          <label for="filter-family">Family</label>
+          <select id="filter-family">
+            <option value="">All</option>
+          </select>
+          <label for="filter-q">Search</label>
+          <input id="filter-q" type="search" placeholder="path, ip, method, status" />
           <button id="clear-filters" class="btn">Clear Filters</button>
           <label class="toggle">
             <input id="auto-scroll" type="checkbox" checked />
@@ -57,18 +72,7 @@
       </article>
     </section>
 
-    <section class="grid two">
-      <article class="panel">
-        <h2>Local Server Log</h2>
-        <div id="local-log" class="log-box log-stream" aria-live="polite">Loading...</div>
-      </article>
-      <article class="panel">
-        <h2>ngrok Log</h2>
-        <div id="ngrok-log" class="log-box log-stream" aria-live="polite">Loading...</div>
-      </article>
-    </section>
-
-    <section class="grid two">
+    <section class="grid two panel-group" data-panel="overview">
       <article class="panel">
         <h2>Top Accessed Files</h2>
         <div id="chart-files"></div>
@@ -79,7 +83,7 @@
       </article>
     </section>
 
-    <section class="grid two">
+    <section class="grid two panel-group" data-panel="overview">
       <article class="panel">
         <h2>Status Code Breakdown</h2>
         <div id="chart-status"></div>
@@ -90,7 +94,7 @@
       </article>
     </section>
 
-    <section class="grid two">
+    <section class="grid two panel-group" data-panel="overview">
       <article class="panel">
         <h2>Top Client IPs</h2>
         <div class="sort-controls">
@@ -114,9 +118,9 @@
       </article>
     </section>
 
-    <section class="grid two">
+    <section class="grid two panel-group" data-panel="overview">
       <article class="panel">
-        <h2>Requests Per Hour</h2>
+        <h2>Hourly Traffic</h2>
         <div id="chart-hourly"></div>
       </article>
       <article class="panel">
@@ -125,14 +129,101 @@
       </article>
     </section>
 
-    <section class="grid">
+    <section class="grid panel-group" data-panel="overview">
       <article class="panel">
         <h2>Status Code Explanations</h2>
         <div id="status-explanations"></div>
       </article>
     </section>
+
+    <section class="grid two panel-group hidden" data-panel="security">
+      <article class="panel">
+        <h2>Security Signals</h2>
+        <div id="security-signals"></div>
+        <h3 class="panel-subhead">Active Alerts</h3>
+        <div id="alerts-list"></div>
+      </article>
+      <article class="panel">
+        <h2>Top Probe IPs</h2>
+        <div id="chart-probe-ips"></div>
+        <h3 class="panel-subhead">Last 10 Probe Requests</h3>
+        <div id="probe-ips-logs"></div>
+        <h3 class="panel-subhead">Top API Probe IPs</h3>
+        <div id="chart-api-probe-ips"></div>
+      </article>
+    </section>
+
+    <section class="grid panel-group hidden" data-panel="security">
+      <article class="panel">
+        <h2>IP Defense Actions</h2>
+        <div id="security-actions"></div>
+      </article>
+    </section>
+
+    <section class="grid panel-group hidden" data-panel="security">
+      <article class="panel">
+        <h2>Run Attack Scan</h2>
+        <div id="attack-scan-controls"></div>
+      </article>
+    </section>
+
+    <section class="grid panel-group hidden" data-panel="security">
+      <article class="panel">
+        <h2>Attack Simulation Results</h2>
+        <div id="attack-report-summary"></div>
+      </article>
+    </section>
+
+    <section class="grid panel-group hidden" data-panel="logs">
+      <article class="panel">
+        <h2>Raw Logs</h2>
+        <div class="sort-controls">
+          <label for="logs-source">Source</label>
+          <select id="logs-source">
+            <option value="local">Local</option>
+            <option value="ngrok">ngrok</option>
+          </select>
+          <label for="logs-sort">Sort</label>
+          <select id="logs-sort">
+            <option value="dt">Time</option>
+            <option value="status">Status</option>
+            <option value="path">Path</option>
+            <option value="ip">IP</option>
+          </select>
+          <label for="logs-order">Order</label>
+          <select id="logs-order">
+            <option value="desc">Desc</option>
+            <option value="asc">Asc</option>
+          </select>
+          <label for="logs-search">Search</label>
+          <input id="logs-search" type="search" placeholder="filter rows" />
+        </div>
+        <div id="log-table-wrap" class="log-table-wrap"></div>
+      </article>
+    </section>
+
+    <section class="grid panel-group hidden" data-panel="settings">
+      <article class="panel">
+        <h2>Manual Security Rules</h2>
+        <div id="rules-list"></div>
+      </article>
+      <article class="panel">
+        <h2>Live Tail</h2>
+        <div class="grid two">
+          <div>
+            <h3 class="panel-subhead">Local Server Log</h3>
+            <div id="local-log" class="log-box log-stream" aria-live="polite">Loading...</div>
+          </div>
+          <div>
+            <h3 class="panel-subhead">ngrok Log</h3>
+            <div id="ngrok-log" class="log-box log-stream" aria-live="polite">Loading...</div>
+          </div>
+        </div>
+      </article>
+    </section>
   </main>
 
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script src="/dashboard.js"></script>
 </body>
 </html>
