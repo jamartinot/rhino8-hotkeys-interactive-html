@@ -44,3 +44,12 @@ desktop.ini
 #ignore commit-history.txt
 commit-history.txt
 todo.txt
+
+# Consolidated security report artifact
+MERGED_VULNERABILITY_REPORT.md
+
+# Local private backups (never commit)
+local_private_backup/
+
+# Generated security scan artifacts
+ngrok/attack-simulation-report.json

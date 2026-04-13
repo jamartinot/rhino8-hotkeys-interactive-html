@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import subprocess
 import threading
 import tempfile
@@ -167,6 +168,114 @@ class DashboardServerRobustnessTests(unittest.TestCase):
         self.assertEqual(security["unique_probe_ips"], 1)
         self.assertTrue(any(item["label"] == "10.0.0.1" for item in security["top_api_probe_ips"]))
 
+    def test_clear_active_alerts_suppresses_visible_alerts(self):
+        stats = {
+            "total_requests": 100,
+            "status_families": [
+                {"label": "4xx", "value": DASHBOARD.ALERT_4XX_THRESHOLD + 1},
+                {"label": "5xx", "value": DASHBOARD.ALERT_5XX_THRESHOLD + 1},
+            ],
+            "security": {
+                "suspicious_requests": 80,
+                "rate_limited_requests": DASHBOARD.ALERT_RATE_LIMIT_THRESHOLD + 1,
+            },
+        }
+
+        with DASHBOARD.ALERT_SUPPRESSION_LOCK:
+            DASHBOARD.ALERT_SUPPRESSED_CODES.clear()
+
+        baseline_codes = {item.get("code") for item in DASHBOARD.evaluate_alerts(stats)}
+        self.assertIn("probe-rate", baseline_codes)
+        self.assertIn("high-4xx", baseline_codes)
+
+        cleared_codes = DASHBOARD.clear_active_alerts(stats)
+        self.assertIn("probe-rate", cleared_codes)
+        self.assertIn("high-4xx", cleared_codes)
+
+        suppressed = DASHBOARD.evaluate_alerts(stats)
+        self.assertEqual(suppressed, [])
+
+        recovered_stats = {
+            "total_requests": 100,
+            "status_families": [{"label": "4xx", "value": 0}, {"label": "5xx", "value": 0}],
+            "security": {"suspicious_requests": 0, "rate_limited_requests": 0},
+        }
+        self.assertEqual(DASHBOARD.evaluate_alerts(recovered_stats), [])
+
+    def test_lookup_directories_finds_matching_cached_paths(self):
+        original_cache = dict(DASHBOARD.PUBLIC_DIRECTORY_CACHE)
+
+        try:
+            with DASHBOARD.PUBLIC_DIRECTORY_CACHE_LOCK:
+                DASHBOARD.PUBLIC_DIRECTORY_CACHE.clear()
+                DASHBOARD.PUBLIC_DIRECTORY_CACHE["https://example.ngrok.dev::/cai/"] = {
+                    "fingerprint": "abc",
+                    "children": ["/cai/original.html", "/cai/new-file.html"],
+                    "tested_at": "2026-04-09T10:00:00",
+                }
+
+            hits = DASHBOARD.lookup_directories("new-file", target="https://example.ngrok.dev")
+            self.assertEqual(len(hits), 1)
+            self.assertEqual(hits[0]["directory"], "/cai/")
+            self.assertEqual(hits[0]["path"], "/cai/new-file.html")
+            self.assertIn("https://example.ngrok.dev/cai/new-file.html", hits[0]["url"])
+        finally:
+            with DASHBOARD.PUBLIC_DIRECTORY_CACHE_LOCK:
+                DASHBOARD.PUBLIC_DIRECTORY_CACHE.clear()
+                DASHBOARD.PUBLIC_DIRECTORY_CACHE.update(original_cache)
+
+    def test_acknowledge_directory_scan_changes_persists_baseline(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            baseline_path = Path(tmp_dir) / "dir-baseline.json"
+            old_baseline_file = DASHBOARD.DIRECTORY_SCAN_BASELINE_FILE
+
+            try:
+                DASHBOARD.DIRECTORY_SCAN_BASELINE_FILE = baseline_path
+                with DASHBOARD.DIRECTORY_SCAN_STATE_LOCK:
+                    DASHBOARD.DIRECTORY_SCAN_STATE.update(
+                        {
+                            "target": "https://example.ngrok.dev/Rhino8_cheat_sheet_timestamps_interactive.html",
+                            "origin": "https://example.ngrok.dev",
+                            "scanned_at": "2026-04-09T10:01:00",
+                            "paths": ["/cai/a.html", "/cai/b.html"],
+                            "changes": {"added": ["/cai/b.html"], "removed": []},
+                            "has_unacknowledged_changes": True,
+                        }
+                    )
+
+                result = DASHBOARD.acknowledge_directory_scan_changes(
+                    target="https://example.ngrok.dev/Rhino8_cheat_sheet_timestamps_interactive.html"
+                )
+
+                self.assertTrue(result["ok"])
+                self.assertEqual(result["path_count"], 2)
+                payload = json.loads(baseline_path.read_text(encoding="utf-8"))
+                self.assertIn("https://example.ngrok.dev", payload)
+                self.assertEqual(payload["https://example.ngrok.dev"]["paths"], ["/cai/a.html", "/cai/b.html"])
+
+                with DASHBOARD.DIRECTORY_SCAN_STATE_LOCK:
+                    self.assertFalse(DASHBOARD.DIRECTORY_SCAN_STATE["has_unacknowledged_changes"])
+                    self.assertEqual(DASHBOARD.DIRECTORY_SCAN_STATE["changes"], {"added": [], "removed": []})
+            finally:
+                DASHBOARD.DIRECTORY_SCAN_BASELINE_FILE = old_baseline_file
+
+    def test_acknowledge_directory_scan_requires_scan_first(self):
+        with DASHBOARD.DIRECTORY_SCAN_STATE_LOCK:
+            DASHBOARD.DIRECTORY_SCAN_STATE.update(
+                {
+                    "target": None,
+                    "origin": None,
+                    "scanned_at": None,
+                    "paths": [],
+                    "changes": {"added": [], "removed": []},
+                    "has_unacknowledged_changes": False,
+                }
+            )
+
+        result = DASHBOARD.acknowledge_directory_scan_changes(target="https://example.ngrok.dev")
+        self.assertFalse(result["ok"])
+        self.assertIn("run directory scan", result["error"].lower())
+
     def test_normalize_request_path_decodes_and_strips_tracking_query(self):
         path = "/Op.fi%20verkkopalvelu%20_%20OP.html?utm_source=x&gclid=abc&lang=fi"
         normalized = DASHBOARD.normalize_request_path(path)
@@ -212,10 +321,100 @@ class DashboardServerRobustnessTests(unittest.TestCase):
             burst_concurrency=12,
             timeout_seconds=9,
             allow_public_target=True,
+            allow_outside_origin=False,
+            run_invasive_after_scan=False,
         )
         self.assertIn("--target", cmd)
         self.assertIn("https://example.com/page.html", cmd)
         self.assertIn("--allow-public-target", cmd)
+        self.assertNotIn("--allow-outside-origin", cmd)
+        self.assertNotIn("--run-invasive-after-scan", cmd)
+
+    def test_build_attack_scan_command_can_allow_outside_origin(self):
+        cmd = DASHBOARD.build_attack_scan_command(
+            target="https://example.com/page.html",
+            profile="standard",
+            output_path=Path("report.json"),
+            burst_requests=90,
+            burst_concurrency=12,
+            timeout_seconds=9,
+            allow_public_target=True,
+            allow_outside_origin=True,
+            run_invasive_after_scan=True,
+        )
+        self.assertIn("--allow-outside-origin", cmd)
+        self.assertIn("--run-invasive-after-scan", cmd)
+
+    def test_test_public_connection_tracks_last_test_and_directory_alerts(self):
+        original_paths = DASHBOARD.PUBLIC_CONNECTION_TEST_PATHS
+        original_cache = dict(DASHBOARD.PUBLIC_DIRECTORY_CACHE)
+
+        class FakeResponse:
+            def __init__(self, url: str, status: int, body: str, content_type: str = "text/html"):
+                self.url = url
+                self.status = status
+                self._body = body.encode("utf-8")
+                self._headers = {"Content-Type": content_type}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def read(self, size: int = -1):
+                return self._body
+
+            def getcode(self):
+                return self.status
+
+            @property
+            def headers(self):
+                return self._headers
+
+        root_url = "https://example.ngrok.dev/Rhino8_cheat_sheet_timestamps_interactive.html"
+        cai_url = "https://example.ngrok.dev/cai/CAI_%20Collision%20Awareness%20Indicator.html"
+        pdf_url = "https://example.ngrok.dev/Rhino%208%20Interactive%20Cheat%20Sheet%20Manual.pdf"
+        cai_dir_url = "https://example.ngrok.dev/cai/"
+        body_state = {"run": 0}
+
+        def fake_urlopen(request, timeout=5.0):
+            url = getattr(request, "full_url", str(request))
+            if url == root_url:
+                return FakeResponse(url, 200, '<a href="/cai/">cai</a><a href="/Rhino 8 Interactive Cheat Sheet Manual.pdf">pdf</a>')
+            if url in {cai_url, cai_dir_url}:
+                body_state["run"] += 1
+                if body_state["run"] == 1:
+                    body = '<a href="/cai/original.html">original</a>'
+                else:
+                    body = '<a href="/cai/original.html">original</a><a href="/cai/added.html">added</a>'
+                return FakeResponse(url, 200, body)
+            if url == pdf_url:
+                return FakeResponse(url, 200, "%PDF-1.7", content_type="application/pdf")
+            return FakeResponse(url, 404, "not found", content_type="text/plain")
+
+        DASHBOARD.PUBLIC_CONNECTION_TEST_PATHS = (("Root", "/Rhino8_cheat_sheet_timestamps_interactive.html"),)
+        with DASHBOARD.PUBLIC_DIRECTORY_CACHE_LOCK:
+            DASHBOARD.PUBLIC_DIRECTORY_CACHE.clear()
+
+        self.addCleanup(lambda: setattr(DASHBOARD, "PUBLIC_CONNECTION_TEST_PATHS", original_paths))
+
+        def restore_directory_cache():
+            with DASHBOARD.PUBLIC_DIRECTORY_CACHE_LOCK:
+                DASHBOARD.PUBLIC_DIRECTORY_CACHE.clear()
+                DASHBOARD.PUBLIC_DIRECTORY_CACHE.update(original_cache)
+
+        self.addCleanup(restore_directory_cache)
+
+        with patch.object(DASHBOARD, "urlopen", side_effect=fake_urlopen):
+            first = DASHBOARD.test_public_connection(target="https://example.ngrok.dev", timeout_seconds=1.0)
+            second = DASHBOARD.test_public_connection(target="https://example.ngrok.dev", timeout_seconds=1.0)
+
+        self.assertEqual(first["last_tested_at"], first["tested_at"])
+        self.assertEqual(second["last_tested_at"], second["tested_at"])
+        self.assertEqual(first.get("directory_alerts"), [])
+        self.assertTrue(any("added.html" in ",".join(item.get("added_paths", [])) for item in second.get("directory_alerts", [])))
+        self.assertTrue(any(item.get("directory") == "/cai/" for item in second.get("directory_checks", [])))
 
     def test_compute_attack_scan_process_timeout_scales_with_burst(self):
         low = DASHBOARD.compute_attack_scan_process_timeout(8, burst_requests=20, burst_concurrency=20, profile="quick")
@@ -225,12 +424,38 @@ class DashboardServerRobustnessTests(unittest.TestCase):
 
     def test_run_attack_scan_async_uses_computed_timeout(self):
         completed = threading.Event()
-        observed = {"timeout": None}
+        observed = {"called": False}
 
-        class FakeProc:
-            returncode = 0
-            stdout = "ok"
-            stderr = ""
+        class FakeStdout:
+            def __init__(self):
+                self._lines = ["ok\n"]
+
+            def readline(self):
+                if self._lines:
+                    return self._lines.pop(0)
+                return ""
+
+            def read(self):
+                return ""
+
+        class FakePopen:
+            def __init__(self, *args, **kwargs):
+                observed["called"] = True
+                self.stdout = FakeStdout()
+                self.returncode = 0
+                self._done = False
+
+            def poll(self):
+                if self._done:
+                    return 0
+                self._done = True
+                return None
+
+            def kill(self):
+                self.returncode = -9
+
+            def wait(self):
+                return self.returncode
 
         expected_timeout = DASHBOARD.compute_attack_scan_process_timeout(
             8,
@@ -239,13 +464,8 @@ class DashboardServerRobustnessTests(unittest.TestCase):
             profile="standard",
         )
 
-        def fake_run(cmd, capture_output, text, check, timeout):
-            observed["timeout"] = timeout
-            completed.set()
-            return FakeProc()
-
         with patch.object(DASHBOARD, "ATTACK_SCAN_SCRIPT", MODULE_PATH.parent / "security_attack_simulator.py"):
-            with patch.object(DASHBOARD.subprocess, "run", side_effect=fake_run):
+            with patch.object(DASHBOARD.subprocess, "Popen", side_effect=FakePopen):
                 result = DASHBOARD.run_attack_scan_async(
                     target="http://127.0.0.1:8000/index.html",
                     profile="standard",
@@ -253,11 +473,21 @@ class DashboardServerRobustnessTests(unittest.TestCase):
                     burst_concurrency=16,
                     timeout_seconds=8,
                     allow_public_target=False,
+                    allow_outside_origin=False,
+                    run_invasive_after_scan=False,
                 )
 
         self.assertTrue(result["ok"])
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            state = DASHBOARD.get_attack_scan_state()
+            if not state.get("running"):
+                completed.set()
+                break
+            time.sleep(0.01)
         self.assertTrue(completed.wait(1.0))
-        self.assertEqual(observed["timeout"], expected_timeout)
+        self.assertTrue(observed["called"])
+        self.assertEqual(expected_timeout, DASHBOARD.compute_attack_scan_process_timeout(8, 80, 16, "standard"))
 
     def test_run_attack_scan_async_timeout_sets_error_state(self):
         timeout_exc = subprocess.TimeoutExpired(cmd=["python", "scan.py"], timeout=3)
@@ -277,7 +507,7 @@ class DashboardServerRobustnessTests(unittest.TestCase):
             )
 
         with patch.object(DASHBOARD, "ATTACK_SCAN_SCRIPT", MODULE_PATH.parent / "security_attack_simulator.py"):
-            with patch.object(DASHBOARD.subprocess, "run", side_effect=timeout_exc):
+            with patch.object(DASHBOARD.subprocess, "Popen", side_effect=timeout_exc):
                 result = DASHBOARD.run_attack_scan_async(
                     target="http://127.0.0.1:8000/index.html",
                     profile="standard",
@@ -285,6 +515,8 @@ class DashboardServerRobustnessTests(unittest.TestCase):
                     burst_concurrency=16,
                     timeout_seconds=8,
                     allow_public_target=False,
+                    allow_outside_origin=False,
+                    run_invasive_after_scan=False,
                 )
 
         self.assertTrue(result["ok"])
@@ -310,6 +542,8 @@ class DashboardServerRobustnessTests(unittest.TestCase):
             burst_concurrency=16,
             timeout_seconds=8,
             allow_public_target=True,
+            allow_outside_origin=False,
+            run_invasive_after_scan=False,
         )
         self.assertFalse(result["ok"])
 
@@ -324,6 +558,8 @@ class DashboardServerRobustnessTests(unittest.TestCase):
                 burst_concurrency=16,
                 timeout_seconds=8,
                 allow_public_target=False,
+                allow_outside_origin=False,
+                run_invasive_after_scan=False,
             )
         finally:
             DASHBOARD.ATTACK_SCAN_SCRIPT = original
@@ -473,7 +709,7 @@ class DashboardServerRobustnessTests(unittest.TestCase):
                     result = DASHBOARD.test_public_connection(target=None)
 
         self.assertTrue(result["connected"])
-        self.assertIn("extraterritorial-carlota-ironfisted.ngrok-free.dev", result["target"])
+        self.assertIn("Rhino8_cheat_sheet_timestamps_interactive.html", result["target"])
 
 
 if __name__ == "__main__":

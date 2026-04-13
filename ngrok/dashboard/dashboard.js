@@ -1,4 +1,5 @@
 const FALLBACK_REFRESH_SECONDS = 60;
+const SITE_HEALTH_REFRESH_MS = 15 * 60 * 1000;
 const MAX_LOG_LINES = 500;
 const FILTER_DEBOUNCE_MS = 300;
 
@@ -17,6 +18,8 @@ const state = {
     burstConcurrency: 16,
     timeout: 8,
     allowPublicTarget: true,
+    allowOutsideOrigin: false,
+    runInvasiveAfterScan: false,
   },
   logs: {
     local: "",
@@ -46,6 +49,7 @@ const state = {
     retryDelayMs: 1000,
     retryTimer: null,
     eventSource: null,
+    lastTestedAt: null,
   },
   ui: {
     autoScroll: true,
@@ -88,6 +92,151 @@ function showError(message) {
 
 function showInfo(message) {
   setBanner(message, "info");
+}
+
+function renderConnectionCheckCard(payload) {
+  const card = byId("connection-check-card");
+  if (!card) return;
+  card.replaceChildren();
+
+  const lastTestedAt = payload?.last_tested_at ? new Date(payload.last_tested_at).toLocaleString() : "-";
+
+  const checks = Array.isArray(payload?.checks) ? payload.checks : [];
+  if (checks.length === 0) {
+    card.textContent = `Connection checks are not available yet. Last test: ${lastTestedAt}`;
+    return;
+  }
+
+  const title = document.createElement("div");
+  title.className = "connection-check-title";
+  title.textContent = "Status Check Files (name, URL, code, latency)";
+  card.appendChild(title);
+
+  const summary = document.createElement("div");
+  summary.className = "connection-check-summary";
+  summary.textContent = `Last test: ${lastTestedAt}`;
+  card.appendChild(summary);
+
+  const list = document.createElement("div");
+  list.className = "connection-check-list";
+
+  for (const item of checks) {
+    const row = document.createElement("div");
+    row.className = `connection-check-row ${item.ok ? "ok" : "fail"}`;
+
+    const main = document.createElement("div");
+    main.className = "connection-check-main";
+
+    const name = document.createElement("span");
+    name.className = "connection-check-name";
+    name.textContent = item.label || "file";
+
+    const meta = document.createElement("span");
+    meta.className = "connection-check-meta";
+    const status = item.status == null ? "-" : String(item.status);
+    const latency = item.latency_ms == null ? "-" : `${item.latency_ms}ms`;
+    const testedAt = item.tested_at ? new Date(item.tested_at).toLocaleTimeString() : "-";
+    meta.textContent = `code=${status} latency=${latency} tested=${testedAt}`;
+
+    main.append(name, meta);
+    row.appendChild(main);
+
+    if (item.url) {
+      const link = document.createElement("a");
+      link.className = "connection-check-url";
+      link.href = item.url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = item.url;
+      row.appendChild(link);
+    }
+
+    list.appendChild(row);
+  }
+
+  card.appendChild(list);
+
+  const directoryAlerts = Array.isArray(payload?.directory_alerts) ? payload.directory_alerts : [];
+  if (directoryAlerts.length > 0) {
+    const alerts = document.createElement("div");
+    alerts.className = "connection-directory-alerts";
+    const label = document.createElement("div");
+    label.className = "connection-check-title";
+    label.textContent = "Directory changes detected";
+    alerts.appendChild(label);
+
+    for (const item of directoryAlerts) {
+      const row = document.createElement("div");
+      row.className = "connection-directory-alert";
+      const added = Array.isArray(item.added_paths) ? item.added_paths : [];
+      const removed = Array.isArray(item.removed_paths) ? item.removed_paths : [];
+      const parts = [];
+      if (added.length > 0) parts.push(`new: ${added.join(", ")}`);
+      if (removed.length > 0) parts.push(`removed: ${removed.join(", ")}`);
+      row.textContent = `${item.directory || "directory"} - ${parts.join(" | ") || item.message || "changed"}`;
+      alerts.appendChild(row);
+    }
+
+    card.appendChild(alerts);
+  }
+}
+
+function renderDirectoryLookupResults(payload) {
+  const target = byId("directory-lookup-results");
+  if (!target) return;
+  target.replaceChildren();
+
+  const scanPaths = Array.isArray(payload?.paths) ? payload.paths : [];
+  const changeAdded = Array.isArray(payload?.changes?.added) ? payload.changes.added : [];
+  const changeRemoved = Array.isArray(payload?.changes?.removed) ? payload.changes.removed : [];
+
+  if (!payload || (!payload.scanned_at && scanPaths.length === 0)) {
+    const empty = document.createElement("div");
+    empty.className = "connection-check-row";
+    empty.textContent = "Directory scan has not run yet.";
+    target.appendChild(empty);
+    return;
+  }
+
+  const summary = document.createElement("div");
+  summary.className = `connection-check-row ${payload?.has_unacknowledged_changes ? "fail" : "ok"}`;
+  const scannedAt = payload?.scanned_at ? new Date(payload.scanned_at).toLocaleString() : "-";
+  summary.textContent = `Last scan: ${scannedAt} | files: ${scanPaths.length} | added: ${changeAdded.length} | removed: ${changeRemoved.length}`;
+  target.appendChild(summary);
+
+  if (changeAdded.length === 0 && changeRemoved.length === 0) {
+    const stable = document.createElement("div");
+    stable.className = "connection-check-row ok";
+    stable.textContent = "No unconfirmed directory changes.";
+    target.appendChild(stable);
+    return;
+  }
+
+  if (changeAdded.length > 0) {
+    const addedLabel = document.createElement("div");
+    addedLabel.className = "connection-check-title";
+    addedLabel.textContent = "New files/directories";
+    target.appendChild(addedLabel);
+    for (const path of changeAdded.slice(0, 50)) {
+      const row = document.createElement("div");
+      row.className = "connection-check-row fail";
+      row.textContent = path;
+      target.appendChild(row);
+    }
+  }
+
+  if (changeRemoved.length > 0) {
+    const removedLabel = document.createElement("div");
+    removedLabel.className = "connection-check-title";
+    removedLabel.textContent = "Removed files/directories";
+    target.appendChild(removedLabel);
+    for (const path of changeRemoved.slice(0, 50)) {
+      const row = document.createElement("div");
+      row.className = "connection-check-row fail";
+      row.textContent = path;
+      target.appendChild(row);
+    }
+  }
 }
 
 function setActionResult(text, isError = false) {
@@ -410,7 +559,7 @@ function renderProbeIpLogs(targetId, probeIps, allLogs) {
   if (!target) return;
 
   if (!state.attackReport?.available) {
-    target.textContent = "Run an attack simulation to reveal probe IP logs.";
+    target.textContent = "Run a penetration tool scan to reveal probe IP logs.";
     return;
   }
 
@@ -423,7 +572,7 @@ function renderProbeIpLogs(targetId, probeIps, allLogs) {
   const probeLogs = (allLogs || []).filter((log) => probeIpSet.has(log.ip));
 
   if (probeLogs.length === 0) {
-    target.textContent = "No probe logs captured in the latest attack simulation.";
+    target.textContent = "No probe logs captured in the latest penetration tool run.";
     return;
   }
 
@@ -470,16 +619,85 @@ async function refreshConnectionHealth() {
     const target = state.attackDefaultTarget || state.attackReport?.target || "";
     const url = target ? `/api/connection-test?target=${encodeURIComponent(target)}` : "/api/connection-test";
     const payload = await fetchJson(url);
+    state.connection.lastTestedAt = payload.last_tested_at || null;
     const checked = Number(payload.checked || 0);
     const required = Number(payload.required || 3);
     const status = payload.connected ? "connected" : "degraded";
     setConnectionStatus(status, `${status} (${checked}/${required})`);
+    renderConnectionCheckCard(payload);
+    if (Array.isArray(payload.directory_alerts) && payload.directory_alerts.length > 0) {
+      showInfo(`${payload.directory_alerts.length} directory change(s) detected`);
+    }
     return payload;
   } catch (error) {
     // Older backend versions may not expose /api/connection-test yet.
     setConnectionStatus("offline", "site check unavailable");
     showError(`Site check unavailable: ${error.message}`);
+    renderConnectionCheckCard(null);
     return null;
+  }
+}
+
+async function clearActiveAlerts() {
+  try {
+    const payload = await fetchJson("/api/alerts/clear", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    const cleared = Number(payload?.cleared || 0);
+    showInfo(cleared > 0 ? `Cleared ${cleared} active alert(s).` : "No active alerts to clear.");
+    await refreshAll();
+  } catch (error) {
+    showError(error.message);
+  }
+}
+
+async function runDirectoryScan() {
+  try {
+    const target = state.attackDefaultTarget || state.attackReport?.target || "";
+    const payload = await fetchJson("/api/directory-scan/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target, timeout: 8 }),
+    });
+    renderDirectoryLookupResults(payload);
+    if (payload?.has_unacknowledged_changes) {
+      const added = Number(payload?.changes?.added?.length || 0);
+      const removed = Number(payload?.changes?.removed?.length || 0);
+      showInfo(`Directory changes detected. Added ${added}, removed ${removed}. Confirm to save baseline.`);
+    } else {
+      showInfo("Directory scan completed. No unconfirmed changes.");
+    }
+  } catch (error) {
+    showError(`Directory scan failed: ${error.message}`);
+  }
+}
+
+async function acknowledgeDirectoryScan() {
+  try {
+    const target = state.attackDefaultTarget || state.attackReport?.target || "";
+    const payload = await fetchJson("/api/directory-scan/ack", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target }),
+    });
+    if (!payload?.ok) {
+      throw new Error(payload?.error || "Failed to confirm directory changes");
+    }
+    showInfo(`Directory baseline updated with ${payload.path_count || 0} paths.`);
+    await loadDirectoryScanStatus();
+  } catch (error) {
+    showError(error.message);
+  }
+}
+
+async function loadDirectoryScanStatus() {
+  try {
+    const payload = await fetchJson("/api/directory-scan/status");
+    renderDirectoryLookupResults(payload?.state || null);
+  } catch {
+    renderDirectoryLookupResults(null);
   }
 }
 
@@ -676,7 +894,7 @@ function renderAttackReport(report) {
   target.replaceChildren();
 
   if (!report || !report.available || !report.summary) {
-    target.textContent = "No attack simulation report detected yet.";
+    target.textContent = "No penetration tool report detected yet.";
     return;
   }
 
@@ -836,9 +1054,11 @@ function renderAttackScanControls(scanState, report, defaultTarget) {
 
   if (!state.attackScanForm.target) {
     // Prefer report target (public server), then default, then fallback
-    state.attackScanForm.target = report?.target || defaultTarget || "https://extraterritorial-carlota-ironfisted.ngrok-free.dev/Rhino8_cheat_sheet_timestamps_interactive.html";
+    state.attackScanForm.target = report?.target || defaultTarget || "http://127.0.0.1:8000/Rhino8_cheat_sheet_timestamps_interactive.html";
     // Ensure we always allow public targets
     state.attackScanForm.allowPublicTarget = true;
+    state.attackScanForm.allowOutsideOrigin = false;
+    state.attackScanForm.runInvasiveAfterScan = false;
   }
 
   const form = document.createElement("div");
@@ -863,9 +1083,19 @@ function renderAttackScanControls(scanState, report, defaultTarget) {
         <input id="scan-allow-public" type="checkbox" ${state.attackScanForm.allowPublicTarget ? "checked" : ""} />
         Allow public target
       </label>
-      <button id="run-attack-scan" class="btn warn" type="button" ${scanState?.running ? "disabled" : ""}>${scanState?.running ? "Running..." : "Run Attack Scan"}</button>
+      <label class="toggle">
+        <input id="scan-allow-outside-origin" type="checkbox" ${state.attackScanForm.allowOutsideOrigin ? "checked" : ""} />
+        Allow outside target origin
+      </label>
+      <label class="toggle">
+        <input id="scan-run-invasive" type="checkbox" ${state.attackScanForm.runInvasiveAfterScan ? "checked" : ""} />
+        Run invasive phase after scan
+      </label>
+      <button id="run-attack-scan" class="btn warn" type="button" ${scanState?.running ? "disabled" : ""}>${scanState?.running ? "Running..." : "Run Penetration Tool"}</button>
     </div>
     <div class="attack-run-status"></div>
+    <div class="attack-run-details"></div>
+    <div class="attack-live-log"></div>
   `;
   target.appendChild(form);
 
@@ -873,8 +1103,39 @@ function renderAttackScanControls(scanState, report, defaultTarget) {
   const finished = scanState?.last_finished ? `last finished: ${scanState.last_finished}` : "not run yet";
   const running = scanState?.running ? "scan is running" : "idle";
   const exitCode = scanState?.last_exit_code == null ? "-" : String(scanState.last_exit_code);
+  const phase = scanState?.last_phase || "-";
+  const progress = Number.isFinite(scanState?.last_progress) ? `${scanState.last_progress}%` : "0%";
   const error = scanState?.last_error ? ` | error: ${scanState.last_error}` : "";
-  status.textContent = `Status: ${running} | exit: ${exitCode} | ${finished}${error}`;
+  status.textContent = `Status: ${running} | phase: ${phase} (${progress}) | exit: ${exitCode} | ${finished}${error}`;
+
+  const details = form.querySelector(".attack-run-details");
+  const lastUpdate = scanState?.last_update_epoch
+    ? new Date(scanState.last_update_epoch * 1000).toLocaleTimeString()
+    : "-";
+  const restrictMode = scanState?.restrict_to_origin === false
+    ? "outside-origin allowed"
+    : "restricted to target origin";
+  const reportRuntime = report?.runtime || {};
+  const reportDuration = Number(reportRuntime.duration_seconds || 0).toFixed(2);
+  const discovered = Number(reportRuntime.discovered_paths || 0);
+  const probes = Number(reportRuntime.probe_cases || 0);
+  const probeFindings = Number(reportRuntime.probe_findings || 0);
+  const invasiveCases = Number(reportRuntime.invasive_cases || 0);
+  const invasiveFindings = Number(reportRuntime.invasive_findings || 0);
+  details.textContent = [
+    `Mode: ${restrictMode}`,
+    `Last update: ${lastUpdate}`,
+    `Report duration: ${reportDuration}s`,
+    `Discovered paths: ${discovered}`,
+    `Probe cases: ${probes}`,
+    `Probe findings: ${probeFindings}`,
+    `Invasive cases: ${invasiveCases}`,
+    `Invasive findings: ${invasiveFindings}`,
+  ].join(" | ");
+
+  const liveLog = form.querySelector(".attack-live-log");
+  const liveLines = Array.isArray(scanState?.live_log) ? scanState.live_log : [];
+  liveLog.textContent = liveLines.length > 0 ? liveLines.join("\n") : "Live penetration log will appear here when running.";
 
   form.querySelector("#scan-target")?.addEventListener("input", (event) => {
     state.attackScanForm.target = event.target.value || "";
@@ -894,6 +1155,12 @@ function renderAttackScanControls(scanState, report, defaultTarget) {
   form.querySelector("#scan-allow-public")?.addEventListener("change", (event) => {
     state.attackScanForm.allowPublicTarget = !!event.target.checked;
   });
+  form.querySelector("#scan-allow-outside-origin")?.addEventListener("change", (event) => {
+    state.attackScanForm.allowOutsideOrigin = !!event.target.checked;
+  });
+  form.querySelector("#scan-run-invasive")?.addEventListener("change", (event) => {
+    state.attackScanForm.runInvasiveAfterScan = !!event.target.checked;
+  });
   form.querySelector("#run-attack-scan")?.addEventListener("click", runAttackScan);
 }
 
@@ -909,12 +1176,14 @@ async function runAttackScan() {
         burst_concurrency: state.attackScanForm.burstConcurrency,
         timeout: state.attackScanForm.timeout,
         allow_public_target: state.attackScanForm.allowPublicTarget,
+        allow_outside_origin: state.attackScanForm.allowOutsideOrigin,
+        run_invasive_after_scan: state.attackScanForm.runInvasiveAfterScan,
       }),
     });
     if (!payload.ok) {
       throw new Error(payload.error || "Failed to start attack scan");
     }
-    showInfo("Attack scan started.");
+    showInfo("Penetration tool started.");
     scheduleRefresh(400);
   } catch (error) {
     showError(error.message);
@@ -1213,6 +1482,8 @@ async function refreshAll() {
     renderAttackReport(state.attackReport);
     renderRecentRequests("recent-requests", state.stats.recent_requests || []);
     renderStatusExplanations("status-explanations", state.stats.status_explanations || {});
+    await refreshConnectionHealth();
+    await loadDirectoryScanStatus();
 
     state.requests.lastRefreshAt = new Date();
     byId("last-refresh").textContent = `Last refresh: ${state.requests.lastRefreshAt.toLocaleTimeString()}`;
@@ -1372,6 +1643,9 @@ function bindActions() {
   byId("stop-all").addEventListener("click", () => taskAction("stop-all"));
   byId("restart-all").addEventListener("click", () => taskAction("restart-all"));
   byId("test-connection").addEventListener("click", () => refreshConnectionHealth());
+  byId("clear-alerts")?.addEventListener("click", clearActiveAlerts);
+  byId("run-directory-scan")?.addEventListener("click", runDirectoryScan);
+  byId("ack-directory-scan")?.addEventListener("click", acknowledgeDirectoryScan);
 
   for (const tab of document.querySelectorAll(".tab")) {
     tab.addEventListener("click", () => {
@@ -1452,7 +1726,6 @@ async function boot() {
 
   updateControlsFromState();
   await refreshAll();
-  await refreshConnectionHealth();
 
   window.addEventListener("popstate", () => {
     applyStateFromUrl();
@@ -1466,6 +1739,9 @@ async function boot() {
       scheduleRefresh(0);
     }
   }, FALLBACK_REFRESH_SECONDS * 1000);
+  setInterval(() => {
+    refreshConnectionHealth();
+  }, SITE_HEALTH_REFRESH_MS);
 }
 
 boot();

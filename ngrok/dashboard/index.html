@@ -20,13 +20,18 @@
         <span id="connection-status" class="status-pill" data-status="offline">offline</span>
         <span id="next-refresh">Next refresh in 15s</span>
       </div>
+      <div id="connection-check-card" class="connection-check-card"></div>
       <div class="actions">
         <button id="start-all" class="btn good">Start All</button>
         <button id="stop-all" class="btn warn">Stop All</button>
         <button id="restart-all" class="btn">Restart All</button>
         <button id="test-connection" class="btn">Test Site</button>
+        <button id="clear-alerts" class="btn">Clear Active Alerts</button>
+        <button id="run-directory-scan" class="btn">Run Directory Scan</button>
+        <button id="ack-directory-scan" class="btn">Confirm Directory Changes</button>
         <a class="btn link" href="/access-report.html" target="_blank" rel="noopener">Open Report</a>
       </div>
+      <div id="directory-lookup-results" class="connection-check-list"></div>
       <p id="action-result" class="action-result"></p>
       <div id="active-filters" class="active-filters"></div>
       <nav class="tabs" aria-label="Dashboard sections">
@@ -162,14 +167,14 @@
 
     <section class="grid panel-group hidden" data-panel="security">
       <article class="panel">
-        <h2>Run Attack Scan</h2>
+        <h2>Run Penetration Tool</h2>
         <div id="attack-scan-controls"></div>
       </article>
     </section>
 
     <section class="grid panel-group hidden" data-panel="security">
       <article class="panel">
-        <h2>Attack Simulation Results</h2>
+        <h2>Penetration Tool Results</h2>
         <div id="attack-report-summary"></div>
       </article>
     </section>

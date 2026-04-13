@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -745,8 +745,8 @@ bar showing file:///... and triggers YouTube's Error 153 security block).</li>
         var player;
         var isPlayerReady = false;
         var ytConnectionLikelyFailed = false;
-        var YT_HELP_INTERACTIVE = 'https://extraterritorial-carlota-ironfisted.ngrok-free.dev/Rhino8_cheat_sheet_timestamps_interactive.html';
-        var YT_HELP_PDF = 'https://extraterritorial-carlota-ironfisted.ngrok-free.dev/Rhino%208%20Interactive%20Cheat%20Sheet%20Manual.pdf';
+        var YT_HELP_INTERACTIVE = (window.location && /^https?:$/.test(window.location.protocol) ? window.location.origin + '/Rhino8_cheat_sheet_timestamps_interactive.html' : 'Rhino8_cheat_sheet_timestamps_interactive.html');
+        var YT_HELP_PDF = (window.location && /^https?:$/.test(window.location.protocol) ? window.location.origin + '/Rhino%208%20Interactive%20Cheat%20Sheet%20Manual.pdf' : 'Rhino 8 Interactive Cheat Sheet Manual.pdf');
         var isLocalFile = Boolean(window.location && window.location.protocol === 'file:');
         var pageBootMs = Date.now();
         var videoErrorShownAutomatically = false;
@@ -1117,3 +1117,4 @@ bar showing file:///... and triggers YouTube's Error 153 security block).</li>
     </script>
 </body>
 </html>
+

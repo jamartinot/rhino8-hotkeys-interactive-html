@@ -1,4 +1,4 @@
-# Sticky Services Runbook (Local Python + ngrok)
+﻿# Sticky Services Runbook (Local Python + ngrok)
 
 Purpose: this is not a full setup guide. It is a record of what was configured and how to operate and troubleshoot it later.
 
@@ -7,7 +7,7 @@ Purpose: this is not a full setup guide. It is a record of what was configured a
 - Local static server is a Scheduled Task: `LocalStaticServer-8000`
 - ngrok tunnel is a Scheduled Task: `Ngrok-8000`
 - Local server serves only this folder:
-  `C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok_tunneling_this_has_port_to_INTERNET`
+  `C:\path\to\html\ngrok_tunneling_this_has_port_to_INTERNET`
 - Port in use: `8000`
 - Logs:
   - `C:\ProgramData\localserver\server-8000.txt`
@@ -158,22 +158,22 @@ Quick recognition rules:
 Generate an HTML dashboard from your local server log:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\generate-access-report.ps1"
+powershell -ExecutionPolicy Bypass -File "C:\path\to\html\ngrok\generate-access-report.ps1"
 ```
 
 Open the generated dashboard:
 
 ```powershell
-Start-Process "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\access-report.html"
+Start-Process "C:\path\to\html\ngrok\access-report.html"
 ```
 
 Optional parameters:
 
 ```powershell
 # choose a different log file and output path
-powershell -ExecutionPolicy Bypass -File "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\generate-access-report.ps1" `
+powershell -ExecutionPolicy Bypass -File "C:\path\to\html\ngrok\generate-access-report.ps1" `
   -LogPath "C:\ProgramData\localserver\server-8000.txt" `
-  -OutPath "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\access-report.html" `
+  -OutPath "C:\path\to\html\ngrok\access-report.html" `
   -Top 100
 ```
 
@@ -191,7 +191,7 @@ Logs in the dashboard now show the newest entries first.
 Live auto-refresh every 15 seconds (regenerate + browser open once):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\start-access-report-live.ps1" -IntervalSeconds 15 -Open
+powershell -ExecutionPolicy Bypass -File "C:\path\to\html\ngrok\start-access-report-live.ps1" -IntervalSeconds 15 -Open
 ```
 
 Stop live refresh with `Ctrl+C` in that terminal.
@@ -209,7 +209,7 @@ This local dashboard gives you one page for everything:
 Start the live dashboard server:
 
 ```powershell
-py -3 "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\dashboard_server.py" --port 8091
+py -3 "C:\path\to\html\ngrok\dashboard_server.py" --port 8091
 ```
 
 Open the dashboard in a browser:
@@ -221,7 +221,7 @@ Start-Process "http://127.0.0.1:8091"
 If you only want the generated HTML report instead of the live dashboard:
 
 ```powershell
-Start-Process "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\access-report.html"
+Start-Process "C:\path\to\html\ngrok\access-report.html"
 ```
 
 IP sorting options are available in both dashboard and report UI:
@@ -258,27 +258,55 @@ Get all available filter values (IPs, sites, status codes) and status explanatio
 curl.exe "http://127.0.0.1:8091/api/dimensions"
 ```
 
+## Penetration Tool Discovery Model
+
+The scanner follows a layered discovery strategy instead of brute forcing names:
+
+1. Recursive crawling
+  - It starts from the entry URL and follows `href` and `src` links it can already see.
+  - Every discovered page or resource is added to a queue so the scan stays inside the site's own link graph.
+
+2. Directory fingerprinting
+  - When a path looks like a directory, the scanner tries common index-style filenames such as `index.html`, `home.html`, and `main.html`.
+  - This is how it expands a reachable folder into more than one visible file without guessing random names.
+
+3. Targeted dictionary checks
+  - The crawler always checks high-signal paths such as `robots.txt`, `sitemap.xml`, and common public assets.
+  - Public scans also include a small list of confirmed public candidate paths under the known public subtree.
+
+4. Bloom-filter-style dedupe
+  - The scanner keeps a compact membership filter to avoid repeatedly queueing paths it has already seen.
+  - A normal visited set still remains authoritative so the crawl stays correct.
+
+5. Soft-404 filtering
+  - The scanner requests a random gibberish path first.
+  - If the server returns the same generic response for that probe, later pages that look identical are skipped unless they clearly contain discovery hints.
+
+6. Separate invasive phase
+  - SQL-like and other invasive checks do not run as part of the normal discovery pass.
+  - They only run when the post-scan invasive option is enabled.
+
 ## Defensive Attack Simulation Tool
 
 Use the local simulator to stress-test your own site with non-destructive probes.
 
 Script:
 
-`C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\security_attack_simulator.py`
+`C:\path\to\html\ngrok\security_attack_simulator.py`
 
 ### Quick local run
 
 ```powershell
-py -3 "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\security_attack_simulator.py" `
+py -3 "C:\path\to\html\ngrok\security_attack_simulator.py" `
   --target "http://127.0.0.1:8000" `
   --profile standard `
-  --output "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\attack-simulation-report.json"
+  --output "C:\path\to\html\ngrok\attack-simulation-report.json"
 ```
 
 ### Scan your public tunnel (only if you own it)
 
 ```powershell
-py -3 "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\security_attack_simulator.py" `
+py -3 "C:\path\to\html\ngrok\security_attack_simulator.py" `
   --target "https://YOUR-NGROK-URL/Rhino8_cheat_sheet_timestamps_interactive.html" `
   --allow-public-target `
   --profile aggressive `
@@ -303,7 +331,7 @@ The tool writes a JSON report and prints findings by severity.
 Start dashboard server:
 
 ```powershell
-py -3 "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\dashboard_server.py" --port 8091
+py -3 "C:\path\to\html\ngrok\dashboard_server.py" --port 8091
 ```
 
 Open dashboard in browser:
@@ -323,13 +351,13 @@ If the browser does not refresh visually after a change, hard-refresh once with 
 Install startup task (run in elevated PowerShell):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\install-dashboard-startup.ps1" -Port 8091 -StartNow
+powershell -ExecutionPolicy Bypass -File "C:\path\to\html\ngrok\install-dashboard-startup.ps1" -Port 8091 -StartNow
 ```
 
 You can also run it directly from PowerShell:
 
 ```powershell
-& "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\install-dashboard-startup.ps1" -Port 8091 -StartNow
+& "C:\path\to\html\ngrok\install-dashboard-startup.ps1" -Port 8091 -StartNow
 ```
 
 Startup log file:
@@ -341,7 +369,7 @@ C:\ProgramData\localserver\dashboard-8091.txt
 Remove startup task:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\uninstall-dashboard-startup.ps1"
+powershell -ExecutionPolicy Bypass -File "C:\path\to\html\ngrok\uninstall-dashboard-startup.ps1"
 ```
 
 ### Robustness tests (break-style parser tests)
@@ -349,7 +377,7 @@ powershell -ExecutionPolicy Bypass -File "C:\Users\gkayt\OneDrive\Documents\vsco
 Run the test suite:
 
 ```powershell
-c:/Users/gkayt/OneDrive/Documents/vscode/html/.venv/Scripts/python.exe -m unittest discover -s "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\tests" -p "test_*.py" -v
+c:/path/to/html/.venv/Scripts/python.exe -m unittest discover -s "C:\path\to\html\ngrok\tests" -p "test_*.py" -v
 ```
 
 The tests include:
@@ -404,9 +432,9 @@ Fix:
 
 Concrete steps:
 1. Run from any shell:
-  `powershell -ExecutionPolicy Bypass -File "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\install-dashboard-startup.ps1" -Port 8090 -StartNow`
+  `powershell -ExecutionPolicy Bypass -File "C:\path\to\html\ngrok\install-dashboard-startup.ps1" -Port 8090 -StartNow`
 2. Or, if you are already in PowerShell:
-  `& "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\install-dashboard-startup.ps1" -Port 8090 -StartNow`
+  `& "C:\path\to\html\ngrok\install-dashboard-startup.ps1" -Port 8090 -StartNow`
 3. If you see policy errors for script loading, use:
   `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`
   then re-run step 1 or 2.
@@ -537,7 +565,7 @@ Example with `9000`:
 $port = 9000
 
 # Update local server task
-$serveDir = "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok_tunneling_this_has_port_to_INTERNET"
+$serveDir = "C:\path\to\html\ngrok_tunneling_this_has_port_to_INTERNET"
 $localArg = "-NoProfile -WindowStyle Hidden -Command `"py -3 -m http.server $port --directory `"$serveDir`" *>> `"C:\ProgramData\localserver\server-$port.txt`"`""
 $localAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $localArg
 $trigger = New-ScheduledTaskTrigger -AtStartup
@@ -577,13 +605,13 @@ Use ngrok Traffic Policy at the edge so public HTML stays open while scanner pat
 
 Policy file:
 
-`C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\traffic-policy-public.yml`
+`C:\path\to\html\ngrok\traffic-policy-public.yml`
 
 ### Immediate run (no task edit)
 
 ```powershell
 Stop-ScheduledTask -TaskName "Ngrok-8000" -ErrorAction SilentlyContinue
-& "C:\ProgramData\chocolatey\bin\ngrok.exe" http 8000 --traffic-policy-file "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\traffic-policy-public.yml" --log stdout
+& "C:\ProgramData\chocolatey\bin\ngrok.exe" http 8000 --traffic-policy-file "C:\path\to\html\ngrok\traffic-policy-public.yml" --log stdout
 ```
 
 ### Persist in Scheduled Task (PowerShell as Administrator)
@@ -591,13 +619,13 @@ Stop-ScheduledTask -TaskName "Ngrok-8000" -ErrorAction SilentlyContinue
 Quick script option:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\apply-ngrok-policy-to-task.ps1"
+powershell -ExecutionPolicy Bypass -File "C:\path\to\html\ngrok\apply-ngrok-policy-to-task.ps1"
 ```
 
 Manual command option:
 
 ```powershell
-$policy = "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\traffic-policy-public.yml"
+$policy = "C:\path\to\html\ngrok\traffic-policy-public.yml"
 $task = Get-ScheduledTask -TaskName "Ngrok-8000"
 $arg = $task.Actions[0].Arguments
 if ($arg -notmatch "--traffic-policy-file") {
@@ -615,3 +643,4 @@ Start-ScheduledTask -TaskName "Ngrok-8000"
 curl.exe -I "https://<your-ngrok-domain>/.git/config"   # expect 403
 curl.exe -I "https://<your-ngrok-domain>/Rhino8_cheat_sheet_timestamps_interactive.html"   # expect 200
 ```
+

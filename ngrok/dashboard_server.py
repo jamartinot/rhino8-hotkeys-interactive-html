@@ -1,5 +1,6 @@
 import argparse
 import base64
+import hashlib
 import math
 import ipaddress
 import json
@@ -22,9 +23,13 @@ BASE_DIR = Path(__file__).resolve().parent
 LOCAL_LOG = Path(os.environ.get("DASHBOARD_LOCAL_LOG", r"C:\ProgramData\localserver\server-8000.txt"))
 NGROK_LOG = Path(os.environ.get("DASHBOARD_NGROK_LOG", r"C:\ProgramData\ngrok\ngrok-8000.txt"))
 ATTACK_REPORT = Path(os.environ.get("DASHBOARD_ATTACK_REPORT", str(BASE_DIR / "attack-simulation-report.json")))
-ATTACK_SCAN_SCRIPT = Path(os.environ.get("DASHBOARD_ATTACK_SCAN_SCRIPT", str(BASE_DIR / "security_attack_simulator.py")))
+ATTACK_SCAN_SCRIPT = Path(os.environ.get("DASHBOARD_ATTACK_SCAN_SCRIPT", str(BASE_DIR / "penetration_tool.py")))
 ATTACK_DEFAULT_TARGET = os.environ.get("DASHBOARD_ATTACK_TARGET", "").strip()
-DEFAULT_PUBLIC_STATUS_TARGET = "https://extraterritorial-carlota-ironfisted.ngrok-free.dev/Rhino8_cheat_sheet_timestamps_interactive.html"
+DIRECTORY_SCAN_BASELINE_FILE = Path(os.environ.get("DASHBOARD_DIRECTORY_SCAN_BASELINE", str(BASE_DIR / "directory-scan-baseline.json")))
+DEFAULT_PUBLIC_STATUS_TARGET = os.environ.get(
+    "DASHBOARD_PUBLIC_STATUS_TARGET",
+    "http://127.0.0.1:8000/Rhino8_cheat_sheet_timestamps_interactive.html",
+)
 TASK_NAMES = [
     os.environ.get("DASHBOARD_TASK_NAME_LOCAL", "LocalStaticServer-8000"),
     os.environ.get("DASHBOARD_TASK_NAME_NGROK", "Ngrok-8000"),
@@ -65,12 +70,36 @@ ATTACK_SCAN_STATE = {
     "last_target": None,
     "last_profile": None,
     "last_output": None,
+    "last_phase": None,
+    "last_progress": 0,
+    "last_phase_message": None,
+    "restrict_to_origin": True,
+    "allow_outside_origin": False,
+    "invasive_after_scan": False,
+    "last_update_epoch": None,
+    "live_log": [],
 }
 PUBLIC_CONNECTION_TEST_PATHS = (
     ("Rhino8_cheat_sheet_timestamps_interactive.html", "/Rhino8_cheat_sheet_timestamps_interactive.html"),
     ("CAI_ Collision Awareness Indicator.html", "/cai/CAI_ Collision Awareness Indicator.html"),
     ("Rhino 8 Interactive Cheat Sheet Manual.pdf", "/Rhino 8 Interactive Cheat Sheet Manual.pdf"),
 )
+PUBLIC_CONNECTION_TEST_LIMIT = 24
+PUBLIC_DIRECTORY_CACHE_LOCK = threading.Lock()
+PUBLIC_DIRECTORY_CACHE = {}
+LATEST_CONNECTION_RESULT_LOCK = threading.Lock()
+LATEST_CONNECTION_RESULT = {}
+ALERT_SUPPRESSION_LOCK = threading.Lock()
+ALERT_SUPPRESSED_CODES = set()
+DIRECTORY_SCAN_STATE_LOCK = threading.Lock()
+DIRECTORY_SCAN_STATE = {
+    "target": None,
+    "origin": None,
+    "scanned_at": None,
+    "paths": [],
+    "changes": {"added": [], "removed": []},
+    "has_unacknowledged_changes": False,
+}
 GEOIP_DB_PATH = Path(os.environ.get("DASHBOARD_GEOIP_DB", str(BASE_DIR / "geoip-local.json")))
 GEOIP_CACHE = {"mtime": None, "rules": []}
 ALERT_PROBE_RATE_THRESHOLD = float(os.environ.get("DASHBOARD_ALERT_PROBE_RATE", "35"))
@@ -362,7 +391,7 @@ def resolve_geo(ip_text: str):
     return {"country": "--", "city": "--", "source": "unmapped"}
 
 
-def evaluate_alerts(stats):
+def build_alerts(stats):
     security = stats.get("security", {})
     families = {item.get("label"): int(item.get("value", 0)) for item in stats.get("status_families", [])}
     total = int(stats.get("total_requests") or 0)
@@ -408,6 +437,181 @@ def evaluate_alerts(stats):
         )
 
     return alerts
+
+
+def clear_active_alerts(stats):
+    active_codes = {str(item.get("code") or "") for item in build_alerts(stats) if str(item.get("code") or "")}
+    with ALERT_SUPPRESSION_LOCK:
+        ALERT_SUPPRESSED_CODES.update(active_codes)
+    return sorted(active_codes)
+
+
+def read_directory_scan_baseline(path: Path):
+    try:
+        if not path.exists():
+            return {}
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(payload, dict):
+            return payload
+    except (OSError, ValueError, TypeError):
+        return {}
+    return {}
+
+
+def write_directory_scan_baseline(path: Path, payload: dict):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    safe_payload = payload if isinstance(payload, dict) else {}
+    path.write_text(json.dumps(safe_payload, indent=2), encoding="utf-8")
+
+
+def resolve_directory_scan_target(target: str | None = None):
+    candidate_target = (target or ATTACK_DEFAULT_TARGET or "").strip()
+    if not candidate_target:
+        report = load_attack_report(ATTACK_REPORT)
+        candidate_target = str(report.get("target") or "").strip()
+    if not candidate_target:
+        candidate_target = DEFAULT_PUBLIC_STATUS_TARGET
+    return candidate_target
+
+
+def normalize_discovered_paths(discovery_payload: dict):
+    paths = []
+    for row in discovery_payload.get("available_files", []) if isinstance(discovery_payload, dict) else []:
+        path = normalize_public_path(str(row.get("path") or ""))
+        if path:
+            paths.append(path)
+    return sorted(set(paths))
+
+
+def get_directory_scan_state():
+    with DIRECTORY_SCAN_STATE_LOCK:
+        return dict(DIRECTORY_SCAN_STATE)
+
+
+def run_directory_scan(target: str | None = None, timeout_seconds: float = 8.0):
+    resolved_target = resolve_directory_scan_target(target)
+    if not resolved_target:
+        return {"ok": False, "error": "target is not configured"}
+
+    origin = normalize_public_origin(resolved_target)
+    if not origin:
+        return {"ok": False, "error": "target is invalid"}
+
+    cmd = build_attack_scan_command(
+        target=resolved_target,
+        profile="quick",
+        output_path=ATTACK_REPORT,
+        burst_requests=30,
+        burst_concurrency=8,
+        timeout_seconds=timeout_seconds,
+        allow_public_target=True,
+        allow_outside_origin=False,
+        run_invasive_after_scan=False,
+    )
+
+    process_timeout = max(90, min(compute_attack_scan_process_timeout(timeout_seconds, 30, 8, "quick"), 300))
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=process_timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": "directory scan timed out"}
+    except Exception as exc:
+        return {"ok": False, "error": f"directory scan failed: {exc}"}
+
+    if int(proc.returncode) != 0:
+        stderr_text = (proc.stderr or proc.stdout or "").strip()
+        return {"ok": False, "error": stderr_text or f"directory scan exited with code {proc.returncode}"}
+
+    report = load_attack_report(ATTACK_REPORT)
+    if not report.get("ok"):
+        return {"ok": False, "error": report.get("error") or "failed to read scan report"}
+
+    discovery = report.get("discovery") if isinstance(report, dict) else {}
+    current_paths = normalize_discovered_paths(discovery or {})
+    scanned_at = datetime.now().isoformat()
+
+    baseline_payload = read_directory_scan_baseline(DIRECTORY_SCAN_BASELINE_FILE)
+    baseline_entry = baseline_payload.get(origin, {}) if isinstance(baseline_payload, dict) else {}
+    baseline_paths = sorted(set(str(item) for item in (baseline_entry.get("paths") or []) if str(item or "").strip()))
+
+    added = sorted(set(current_paths) - set(baseline_paths))
+    removed = sorted(set(baseline_paths) - set(current_paths))
+
+    with DIRECTORY_SCAN_STATE_LOCK:
+        DIRECTORY_SCAN_STATE.update(
+            {
+                "target": resolved_target,
+                "origin": origin,
+                "scanned_at": scanned_at,
+                "paths": current_paths,
+                "changes": {"added": added, "removed": removed},
+                "has_unacknowledged_changes": bool(added or removed),
+            }
+        )
+
+    return {
+        "ok": True,
+        "target": resolved_target,
+        "origin": origin,
+        "scanned_at": scanned_at,
+        "paths": current_paths,
+        "file_tree_lines": discovery.get("file_tree_lines") if isinstance(discovery, dict) else [],
+        "changes": {"added": added, "removed": removed},
+        "has_unacknowledged_changes": bool(added or removed),
+    }
+
+
+def acknowledge_directory_scan_changes(target: str | None = None):
+    resolved_target = resolve_directory_scan_target(target)
+    origin = normalize_public_origin(resolved_target)
+    if not origin:
+        return {"ok": False, "error": "target is invalid"}
+
+    with DIRECTORY_SCAN_STATE_LOCK:
+        state_origin = DIRECTORY_SCAN_STATE.get("origin")
+        state_paths = list(DIRECTORY_SCAN_STATE.get("paths") or [])
+        state_scanned_at = DIRECTORY_SCAN_STATE.get("scanned_at")
+        if state_origin != origin or not state_paths:
+            return {"ok": False, "error": "run directory scan before confirming changes"}
+
+    baseline_payload = read_directory_scan_baseline(DIRECTORY_SCAN_BASELINE_FILE)
+    baseline_payload[origin] = {
+        "paths": state_paths,
+        "saved_at": datetime.now().isoformat(),
+        "target": resolved_target,
+        "last_scan_at": state_scanned_at,
+    }
+    try:
+        write_directory_scan_baseline(DIRECTORY_SCAN_BASELINE_FILE, baseline_payload)
+    except OSError as exc:
+        return {"ok": False, "error": f"failed to save baseline: {exc}"}
+
+    with DIRECTORY_SCAN_STATE_LOCK:
+        DIRECTORY_SCAN_STATE["changes"] = {"added": [], "removed": []}
+        DIRECTORY_SCAN_STATE["has_unacknowledged_changes"] = False
+
+    return {
+        "ok": True,
+        "origin": origin,
+        "target": resolved_target,
+        "saved_at": baseline_payload[origin]["saved_at"],
+        "path_count": len(state_paths),
+    }
+
+
+def evaluate_alerts(stats):
+    alerts = build_alerts(stats)
+    active_codes = {str(item.get("code") or "") for item in alerts if str(item.get("code") or "")}
+    with ALERT_SUPPRESSION_LOCK:
+        # Keep suppression only for currently active alert families.
+        ALERT_SUPPRESSED_CODES.intersection_update(active_codes)
+        suppressed_codes = set(ALERT_SUPPRESSED_CODES)
+    return [item for item in alerts if str(item.get("code") or "") not in suppressed_codes]
 
 
 def get_task_names():
@@ -1147,6 +1351,137 @@ def build_public_target_url(target: str, path: str):
     return f"{parsed.scheme}://{parsed.netloc}{normalized_path}"
 
 
+def build_public_url_from_origin(origin: str, path: str):
+    parsed = urlsplit((origin or "").strip())
+    if not parsed.scheme or not parsed.netloc:
+        return None
+    normalized_path = normalize_public_path(path)
+    encoded_path = "/" + "/".join(quote(part, safe="") for part in normalized_path.lstrip("/").split("/"))
+    return f"{parsed.scheme}://{parsed.netloc}{encoded_path}"
+
+
+def normalize_public_origin(target: str | None) -> str:
+    parsed = urlsplit((target or "").strip())
+    if not parsed.scheme or not parsed.netloc:
+        return ""
+    return f"{parsed.scheme.lower()}://{parsed.netloc.lower()}"
+
+
+def normalize_public_path(path: str | None) -> str:
+    normalized = normalize_request_path(path or "")
+    return normalized.split("?", 1)[0] or "/"
+
+
+def derive_directory_path(path: str | None) -> str:
+    raw = str(path or "").strip()
+    if not raw or raw == "/":
+        return "/"
+    if raw.endswith("/"):
+        cleaned = raw.split("#", 1)[0].split("?", 1)[0]
+        if not cleaned.startswith("/"):
+            cleaned = f"/{cleaned}"
+        return re.sub(r"/{2,}", "/", cleaned if cleaned.endswith("/") else f"{cleaned}/")
+
+    normalized = normalize_public_path(raw)
+    if "/" not in normalized.strip("/"):
+        return "/"
+    parent = normalized.rsplit("/", 1)[0]
+    return parent + "/" if parent else "/"
+
+
+def extract_public_link_paths(html_text: str, current_path: str = "/"):
+    if not html_text:
+        return []
+
+    matches = re.findall(r"(?:href|src)=['\"]([^'\"]+)['\"]", html_text, flags=re.IGNORECASE)
+    out = []
+    for value in matches:
+        candidate = str(value or "").strip()
+        if not candidate or candidate.startswith(("http://", "https://", "data:", "mailto:", "javascript:", "#", "?")):
+            continue
+        if not candidate.startswith("/"):
+            base_dir = current_path if current_path.endswith("/") else current_path.rsplit("/", 1)[0]
+            if not base_dir.endswith("/"):
+                base_dir += "/"
+            candidate = base_dir + candidate.lstrip("./")
+        candidate = re.sub(r"/{2,}", "/", candidate.split("#", 1)[0].split("?", 1)[0])
+        if not candidate.startswith("/"):
+            candidate = f"/{candidate}"
+        parts = candidate.split("/")
+        encoded_parts = [quote(part, safe="") if part and "%" not in part else part for part in parts]
+        out.append("/".join(encoded_parts))
+
+    return sorted(set(out))
+
+
+def fingerprint_paths(paths):
+    normalized = sorted({normalize_public_path(path) for path in (paths or []) if str(path or "").strip()})
+    digest = hashlib.sha256("\n".join(normalized).encode("utf-8")).hexdigest()
+    return digest, normalized
+
+
+def compare_directory_fingerprint(target: str, directory_path: str, children: list[str], tested_at: str):
+    directory_url = build_public_target_url(target, directory_path)
+    fingerprint, normalized_children = fingerprint_paths(children)
+    cache_key = f"{normalize_public_origin(target)}::{derive_directory_path(directory_path)}"
+    with PUBLIC_DIRECTORY_CACHE_LOCK:
+        previous = PUBLIC_DIRECTORY_CACHE.get(cache_key)
+        previous_children = list(previous.get("children", [])) if previous else []
+        previous_fingerprint = previous.get("fingerprint") if previous else None
+        PUBLIC_DIRECTORY_CACHE[cache_key] = {
+            "fingerprint": fingerprint,
+            "children": normalized_children,
+            "tested_at": tested_at,
+        }
+
+    added = sorted(set(normalized_children) - set(previous_children)) if previous is not None else []
+    removed = sorted(set(previous_children) - set(normalized_children)) if previous is not None else []
+    return {
+        "directory": derive_directory_path(directory_path),
+        "url": directory_url,
+        "fingerprint": fingerprint,
+        "child_count": len(normalized_children),
+        "added_paths": added,
+        "removed_paths": removed,
+        "changed": bool(previous_fingerprint and previous_fingerprint != fingerprint),
+        "first_seen": not bool(previous),
+    }
+
+
+def lookup_directories(query_text: str, target: str | None = None, limit: int = 30):
+    term = str(query_text or "").strip().lower()
+    if not term:
+        return []
+
+    normalized_target_origin = normalize_public_origin(target or "") if target else ""
+    hits = []
+    with PUBLIC_DIRECTORY_CACHE_LOCK:
+        for cache_key, payload in PUBLIC_DIRECTORY_CACHE.items():
+            origin, _, directory = cache_key.partition("::")
+            if normalized_target_origin and origin != normalized_target_origin:
+                continue
+            directory = directory or "/"
+            tested_at = payload.get("tested_at")
+            children = list(payload.get("children") or [])
+            for child in children:
+                child_text = str(child or "")
+                if term not in child_text.lower():
+                    continue
+                url = build_public_url_from_origin(origin, child_text)
+                hits.append(
+                    {
+                        "directory": directory,
+                        "path": child_text,
+                        "url": url,
+                        "origin": origin,
+                        "tested_at": tested_at,
+                    }
+                )
+                if len(hits) >= limit:
+                    return hits
+    return hits
+
+
 def build_tree_nodes(file_tree_lines, target: str):
     lines = [str(line or "") for line in (file_tree_lines or []) if str(line or "").strip()]
     if not lines:
@@ -1191,6 +1526,7 @@ def build_tree_nodes(file_tree_lines, target: str):
 
 
 def test_public_connection(target: str | None = None, timeout_seconds: float = 5.0):
+    tested_at = datetime.now().isoformat()
     candidate_target = (target or ATTACK_DEFAULT_TARGET or "").strip()
     if not candidate_target:
         report = load_attack_report(ATTACK_REPORT)
@@ -1206,8 +1542,16 @@ def test_public_connection(target: str | None = None, timeout_seconds: float = 5
         return {"ok": False, "connected": False, "error": "public target is invalid", "checks": []}
 
     checks = []
+    directory_children: dict[str, set[str]] = {}
+    directory_checks = []
+    crawl_queue = [(label, path, 0) for label, path in PUBLIC_CONNECTION_TEST_PATHS]
+    seen_paths = set()
     connected_count = 0
-    for label, path in PUBLIC_CONNECTION_TEST_PATHS:
+    while crawl_queue and len(seen_paths) < PUBLIC_CONNECTION_TEST_LIMIT:
+        label, path, depth = crawl_queue.pop(0)
+        if path in seen_paths:
+            continue
+        seen_paths.add(path)
         url = build_public_target_url(candidate_target, path)
         if not url:
             checks.append({"label": label, "path": path, "url": None, "ok": False, "status": None, "error": "invalid url"})
@@ -1228,14 +1572,26 @@ def test_public_connection(target: str | None = None, timeout_seconds: float = 5
                 ok = 200 <= status < 400
                 if ok:
                     connected_count += 1
+                headers = getattr(response, "headers", {})
+                content_type = str(headers.get("Content-Type") or headers.get("content-type") or "").lower()
+                sample = response.read(32768).decode("utf-8", errors="replace") if "html" in content_type else ""
                 checks.append({
                     "label": label,
                     "path": path,
                     "url": url,
                     "status": status,
                     "ok": ok,
+                    "content_type": content_type or None,
+                    "tested_at": tested_at,
                     "latency_ms": round((time.perf_counter() - started) * 1000.0, 2),
                 })
+                if sample and "html" in content_type:
+                    directory_key = derive_directory_path(path)
+                    children = directory_children.setdefault(directory_key, set())
+                    for child in extract_public_link_paths(sample, current_path=path):
+                        children.add(normalize_public_path(child))
+                        if depth < 2 and len(seen_paths) < PUBLIC_CONNECTION_TEST_LIMIT:
+                            crawl_queue.append((child, child, depth + 1))
         except HTTPError as exc:
             checks.append({
                 "label": label,
@@ -1244,6 +1600,7 @@ def test_public_connection(target: str | None = None, timeout_seconds: float = 5
                 "status": int(getattr(exc, "code", 0) or 0),
                 "ok": False,
                 "error": str(exc),
+                "tested_at": tested_at,
                 "latency_ms": round((time.perf_counter() - started) * 1000.0, 2),
             })
         except URLError as exc:
@@ -1254,6 +1611,7 @@ def test_public_connection(target: str | None = None, timeout_seconds: float = 5
                 "status": None,
                 "ok": False,
                 "error": str(getattr(exc, "reason", exc)),
+                "tested_at": tested_at,
                 "latency_ms": round((time.perf_counter() - started) * 1000.0, 2),
             })
         except Exception as exc:
@@ -1264,17 +1622,40 @@ def test_public_connection(target: str | None = None, timeout_seconds: float = 5
                 "status": None,
                 "ok": False,
                 "error": str(exc),
+                "tested_at": tested_at,
                 "latency_ms": round((time.perf_counter() - started) * 1000.0, 2),
             })
 
-    return {
+    for directory_path, children in sorted(directory_children.items()):
+        directory_checks.append(compare_directory_fingerprint(candidate_target, directory_path, sorted(children), tested_at))
+
+    directory_alerts = [
+        {
+            "directory": item["directory"],
+            "added_paths": item["added_paths"],
+            "removed_paths": item["removed_paths"],
+            "message": f"New files detected in {item['directory']}" if item["added_paths"] else f"Files changed in {item['directory']}",
+        }
+        for item in directory_checks
+        if item["added_paths"] or item["removed_paths"]
+    ]
+
+    result = {
         "ok": connected_count == len(PUBLIC_CONNECTION_TEST_PATHS),
         "connected": connected_count == len(PUBLIC_CONNECTION_TEST_PATHS),
         "checked": connected_count,
         "required": len(PUBLIC_CONNECTION_TEST_PATHS),
         "target": candidate_target,
+        "tested_at": tested_at,
+        "last_tested_at": tested_at,
         "checks": checks,
+        "directory_checks": directory_checks,
+        "directory_alerts": directory_alerts,
     }
+    with LATEST_CONNECTION_RESULT_LOCK:
+        LATEST_CONNECTION_RESULT.clear()
+        LATEST_CONNECTION_RESULT.update(result)
+    return result
 
 
 def get_attack_scan_state():
@@ -1290,6 +1671,8 @@ def build_attack_scan_command(
     burst_concurrency: int,
     timeout_seconds: float,
     allow_public_target: bool,
+    allow_outside_origin: bool,
+    run_invasive_after_scan: bool,
 ):
     cmd = [
         sys.executable,
@@ -1309,6 +1692,10 @@ def build_attack_scan_command(
     ]
     if allow_public_target:
         cmd.append("--allow-public-target")
+    if allow_outside_origin:
+        cmd.append("--allow-outside-origin")
+    if run_invasive_after_scan:
+        cmd.append("--run-invasive-after-scan")
     return cmd
 
 
@@ -1328,7 +1715,16 @@ def compute_attack_scan_process_timeout(timeout_seconds: float, burst_requests: 
     return max(60, min(total, 900))
 
 
-def run_attack_scan_async(target: str, profile: str, burst_requests: int, burst_concurrency: int, timeout_seconds: float, allow_public_target: bool):
+def run_attack_scan_async(
+    target: str,
+    profile: str,
+    burst_requests: int,
+    burst_concurrency: int,
+    timeout_seconds: float,
+    allow_public_target: bool,
+    allow_outside_origin: bool,
+    run_invasive_after_scan: bool,
+):
     profile = normalize_choice(profile, {"quick", "standard", "aggressive"}, "standard")
     target = (target or "").strip()
     if not target:
@@ -1344,6 +1740,14 @@ def run_attack_scan_async(target: str, profile: str, burst_requests: int, burst_
         ATTACK_SCAN_STATE["last_target"] = target
         ATTACK_SCAN_STATE["last_profile"] = profile
         ATTACK_SCAN_STATE["last_error"] = None
+        ATTACK_SCAN_STATE["last_phase"] = "init"
+        ATTACK_SCAN_STATE["last_progress"] = 1
+        ATTACK_SCAN_STATE["last_phase_message"] = "Starting penetration tool"
+        ATTACK_SCAN_STATE["restrict_to_origin"] = not bool(allow_outside_origin)
+        ATTACK_SCAN_STATE["allow_outside_origin"] = bool(allow_outside_origin)
+        ATTACK_SCAN_STATE["invasive_after_scan"] = bool(run_invasive_after_scan)
+        ATTACK_SCAN_STATE["last_update_epoch"] = int(time.time())
+        ATTACK_SCAN_STATE["live_log"] = [f"[{datetime.now().isoformat()}] Penetration tool started for {target}"]
 
     cmd = build_attack_scan_command(
         target=target,
@@ -1353,26 +1757,90 @@ def run_attack_scan_async(target: str, profile: str, burst_requests: int, burst_
         burst_concurrency=burst_concurrency,
         timeout_seconds=timeout_seconds,
         allow_public_target=allow_public_target,
+        allow_outside_origin=allow_outside_origin,
+        run_invasive_after_scan=run_invasive_after_scan,
     )
     process_timeout = compute_attack_scan_process_timeout(timeout_seconds, burst_requests, burst_concurrency, profile)
 
     def worker():
         try:
-            proc = subprocess.run(
+            proc = subprocess.Popen(
                 cmd,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
                 text=True,
-                check=False,
-                timeout=process_timeout,
+                bufsize=1,
             )
-            output = (proc.stdout or "").strip()
-            error = (proc.stderr or "").strip()
+            started_monotonic = time.monotonic()
+            live_lines: list[str] = []
+
+            while True:
+                if proc.stdout is not None:
+                    line = proc.stdout.readline()
+                    if line:
+                        clean_line = line.rstrip("\n")
+                        if clean_line.startswith("[[STATUS]] "):
+                            status_payload = {}
+                            try:
+                                status_payload = json.loads(clean_line[len("[[STATUS]] "):])
+                            except (ValueError, TypeError):
+                                status_payload = {}
+                            if status_payload:
+                                phase = str(status_payload.get("phase") or "running")
+                                progress = clamp_int(status_payload.get("progress"), 0, 0, 100)
+                                message = str(status_payload.get("message") or phase)
+                                extra_fields = {
+                                    key: value
+                                    for key, value in status_payload.items()
+                                    if key not in {"phase", "progress", "message"}
+                                }
+                                display_line = f"[{phase}:{progress}%] {message}"
+                                if extra_fields:
+                                    display_line = f"{display_line} | {json.dumps(extra_fields, ensure_ascii=False)}"
+                                live_lines.append(display_line)
+                                with ATTACK_SCAN_LOCK:
+                                    ATTACK_SCAN_STATE["last_phase"] = phase
+                                    ATTACK_SCAN_STATE["last_progress"] = progress
+                                    ATTACK_SCAN_STATE["last_phase_message"] = message
+                                    ATTACK_SCAN_STATE["last_update_epoch"] = int(time.time())
+                                    ATTACK_SCAN_STATE["live_log"] = live_lines[-400:]
+                                continue
+                        live_lines.append(clean_line)
+                        with ATTACK_SCAN_LOCK:
+                            ATTACK_SCAN_STATE["last_phase"] = "running"
+                            ATTACK_SCAN_STATE["last_phase_message"] = clean_line[:200]
+                            ATTACK_SCAN_STATE["last_update_epoch"] = int(time.time())
+                            ATTACK_SCAN_STATE["live_log"] = live_lines[-400:]
+                        continue
+
+                if proc.poll() is not None:
+                    break
+
+                if (time.monotonic() - started_monotonic) > process_timeout:
+                    proc.kill()
+                    raise subprocess.TimeoutExpired(cmd=cmd, timeout=process_timeout)
+
+                time.sleep(0.1)
+
+            if proc.stdout is not None:
+                remainder = proc.stdout.read() or ""
+                if remainder:
+                    for line in remainder.splitlines():
+                        live_lines.append(line)
+
+            output = "\n".join(live_lines).strip()
+            error = ""
             with ATTACK_SCAN_LOCK:
                 ATTACK_SCAN_STATE["running"] = False
                 ATTACK_SCAN_STATE["last_finished"] = datetime.now().isoformat()
                 ATTACK_SCAN_STATE["last_exit_code"] = int(proc.returncode)
                 ATTACK_SCAN_STATE["last_output"] = (output[-2000:] if output else None)
                 ATTACK_SCAN_STATE["last_error"] = (error[-2000:] if error else None)
+                ATTACK_SCAN_STATE["last_progress"] = 100 if int(proc.returncode) == 0 else ATTACK_SCAN_STATE.get("last_progress", 0)
+                ATTACK_SCAN_STATE["last_phase"] = "complete" if int(proc.returncode) == 0 else "failed"
+                ATTACK_SCAN_STATE["last_phase_message"] = "Penetration tool finished" if int(proc.returncode) == 0 else "Penetration tool failed"
+                ATTACK_SCAN_STATE["last_update_epoch"] = int(time.time())
+                ATTACK_SCAN_STATE["live_log"] = live_lines[-400:]
             set_watch_state_snapshot(build_watch_snapshot())
         except subprocess.TimeoutExpired:
             with ATTACK_SCAN_LOCK:
@@ -1380,6 +1848,12 @@ def run_attack_scan_async(target: str, profile: str, burst_requests: int, burst_
                 ATTACK_SCAN_STATE["last_finished"] = datetime.now().isoformat()
                 ATTACK_SCAN_STATE["last_exit_code"] = -1
                 ATTACK_SCAN_STATE["last_error"] = "scan timed out"
+                ATTACK_SCAN_STATE["last_phase"] = "timeout"
+                ATTACK_SCAN_STATE["last_phase_message"] = "Penetration tool timed out"
+                ATTACK_SCAN_STATE["last_update_epoch"] = int(time.time())
+                logs = list(ATTACK_SCAN_STATE.get("live_log") or [])
+                logs.append(f"[{datetime.now().isoformat()}] scan timed out")
+                ATTACK_SCAN_STATE["live_log"] = logs[-400:]
             set_watch_state_snapshot(build_watch_snapshot())
         except Exception as exc:
             with ATTACK_SCAN_LOCK:
@@ -1387,6 +1861,12 @@ def run_attack_scan_async(target: str, profile: str, burst_requests: int, burst_
                 ATTACK_SCAN_STATE["last_finished"] = datetime.now().isoformat()
                 ATTACK_SCAN_STATE["last_exit_code"] = -1
                 ATTACK_SCAN_STATE["last_error"] = str(exc)
+                ATTACK_SCAN_STATE["last_phase"] = "error"
+                ATTACK_SCAN_STATE["last_phase_message"] = str(exc)
+                ATTACK_SCAN_STATE["last_update_epoch"] = int(time.time())
+                logs = list(ATTACK_SCAN_STATE.get("live_log") or [])
+                logs.append(f"[{datetime.now().isoformat()}] error: {exc}")
+                ATTACK_SCAN_STATE["live_log"] = logs[-400:]
             set_watch_state_snapshot(build_watch_snapshot())
 
     threading.Thread(target=worker, daemon=True).start()
@@ -1571,6 +2051,36 @@ class DashboardHandler(BaseHTTPRequestHandler):
             result = test_public_connection(target=target, timeout_seconds=5.0)
             # Keep dashboard polling/boot resilient: health can be degraded without failing the endpoint itself.
             self._json(200, result)
+            return
+
+        if route == "/api/directory-scan/status":
+            self._json(200, {"ok": True, "state": get_directory_scan_state()})
+            return
+
+        if route == "/api/directory-lookup":
+            target = query.get("target", [None])[0]
+            lookup_query = (query.get("q", [None])[0] or query.get("name", [None])[0] or "").strip()
+            should_refresh = (query.get("refresh", ["0"])[0] or "0").strip() in {"1", "true", "yes", "on"}
+
+            if should_refresh:
+                test_public_connection(target=target, timeout_seconds=5.0)
+
+            hits = lookup_directories(lookup_query, target=target)
+            with LATEST_CONNECTION_RESULT_LOCK:
+                latest_target = str(LATEST_CONNECTION_RESULT.get("target") or "")
+                latest_tested_at = LATEST_CONNECTION_RESULT.get("last_tested_at")
+
+            self._json(
+                200,
+                {
+                    "ok": True,
+                    "query": lookup_query,
+                    "target": target or latest_target,
+                    "last_tested_at": latest_tested_at,
+                    "hits": hits,
+                    "total": len(hits),
+                },
+            )
             return
 
         if route == "/api/log/local":
@@ -1780,6 +2290,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             burst_concurrency = (body or {}).get("burst_concurrency", 16)
             timeout_seconds = (body or {}).get("timeout", 8)
             allow_public_target = bool((body or {}).get("allow_public_target", True))
+            allow_outside_origin = bool((body or {}).get("allow_outside_origin", False))
+            run_invasive_after_scan = bool((body or {}).get("run_invasive_after_scan", False))
 
             result = run_attack_scan_async(
                 target=target,
@@ -1788,8 +2300,49 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 burst_concurrency=burst_concurrency,
                 timeout_seconds=timeout_seconds,
                 allow_public_target=allow_public_target,
+                allow_outside_origin=allow_outside_origin,
+                run_invasive_after_scan=run_invasive_after_scan,
             )
             self._json(200 if result.get("ok") else 400, result)
+            return
+
+        if route == "/api/directory-scan/run":
+            body, err = self._read_json_body()
+            if err:
+                self._json_error(400, err)
+                return
+            target = str((body or {}).get("target") or "").strip() or None
+            timeout_seconds = (body or {}).get("timeout", 8)
+            result = run_directory_scan(target=target, timeout_seconds=float(timeout_seconds or 8))
+            self._json(200 if result.get("ok") else 400, result)
+            return
+
+        if route == "/api/directory-scan/ack":
+            body, err = self._read_json_body()
+            if err:
+                self._json_error(400, err)
+                return
+            target = str((body or {}).get("target") or "").strip() or None
+            result = acknowledge_directory_scan_changes(target=target)
+            self._json(200 if result.get("ok") else 400, result)
+            return
+
+        if route == "/api/alerts/clear":
+            stats_payload = get_access_stats_cached(
+                LOCAL_LOG,
+                top=20,
+                ip_sort="requests",
+                ip_order="desc",
+            )
+            cleared_codes = clear_active_alerts(stats_payload)
+            self._json(
+                200,
+                {
+                    "ok": True,
+                    "cleared": len(cleared_codes),
+                    "codes": cleared_codes,
+                },
+            )
             return
 
         self._text(404, "Not found")

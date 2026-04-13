@@ -1,6 +1,6 @@
 param(
   [string]$LogPath = "C:\ProgramData\localserver\server-8000.txt",
-  [string]$OutPath = "C:\Users\gkayt\OneDrive\Documents\vscode\html\ngrok\access-report.html",
+  [string]$OutPath = "C:\path\to\html\ngrok\access-report.html",
   [int]$Top = 50
 )
 
